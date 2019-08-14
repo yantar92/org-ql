@@ -618,6 +618,9 @@ Replaces bare strings with (regexp) selectors, and appropriate
                      (`(,(or 'tags-i 'itags 'inherited-tags) . ,tags) `(tags-inherited ,@tags))
                      (`(,(or 'tags-l 'ltags 'local-tags) . ,tags) `(tags-local ,@tags))
 
+                     (`(ancestors ,query) `(ancestors ',query))
+                     (`(parent ,query) `(parent ',query))
+
                      ;; Timestamps
                      (`(,(or 'ts-active 'ts-a) . ,rest) `(ts :type active ,@rest))
                      (`(,(or 'ts-inactive 'ts-i) . ,rest) `(ts :type inactive ,@rest))
@@ -910,6 +913,35 @@ Arguments STRING, POS, FILL, and LEVEL are according to
           ,query)))))
 
 ;;;;; Predicates
+
+(org-ql--defpred ancestors (query)
+  "Return non-nil if any of current entry's ancestors matches QUERY."
+  ;; TODO: Rewrite in a way that finds matching parents directly and then
+  ;; returns all child headings.  This is a powerful way to select headings,
+  ;; but it's probably going to be slow because of how it works.  If we
+  ;; could invert it, or turn it inside out, it could be fast.
+  (save-excursion
+    (save-restriction
+      (widen)
+      (cl-loop while (org-up-heading-safe)
+               thereis (save-restriction
+                         (narrow-to-region (point) (org-entry-end-position))
+                         (org-ql-select (current-buffer)
+                           query :narrow t :action (lambda () t)))))))
+
+(org-ql--defpred parent (query)
+  "Return non-nil if current entry's parent matches QUERY."
+  ;; TODO: Rewrite in a way that finds matching parents directly and then
+  ;; returns all child headings.  This is a powerful way to select headings,
+  ;; but it's probably going to be slow because of how it works.  If we
+  ;; could invert it, or turn it inside out, it could be fast.
+  (save-excursion
+    (save-restriction
+      (widen)
+      (when (org-up-heading-safe)
+        (narrow-to-region (point) (org-entry-end-position))
+        (org-ql-select (current-buffer)
+          query :narrow t :action (lambda () t))))))
 
 (org-ql--defpred children (query)
   "Return non-nil if current entry has children matching QUERY."
