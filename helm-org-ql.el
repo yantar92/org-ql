@@ -2,6 +2,8 @@
 
 ;; Author: Adam Porter <adam@alphapapa.net>
 ;; URL: https://github.com/alphapapa/org-ql
+;; Version: 0.5-pre
+;; Package-Requires: ((emacs "26.1") (dash "2.17.0") (s "1.12.0") (helm-org "1.0") (org-ql "0.5-pre"))
 
 ;;; Commentary:
 
@@ -30,28 +32,17 @@
 
 ;;;; Requirements
 
+(require 'cl-lib)
 (require 'org)
+
+(require 'dash)
+(require 's)
 
 (require 'org-ql)
 (require 'org-ql-search)
 
-;; (require 'helm)
-;; (require 'helm-org)
-
-;;;; Compatibility
-
-;; Declare Helm functions since Helm may not be installed.
-(declare-function helm "ext:helm")
-(declare-function helm-run-after-exit "ext:helm")
-(declare-function helm-window "ext:helm-lib")
-(declare-function helm-buffer-get "ext:helm-lib")
-(declare-function helm-make-source "ext:helm-source")
-(declare-function helm-org-goto-marker "ext:helm-org")
-
-;; Silence byte-compiler about variables.
-(defvar helm-map)
-(defvar helm-pattern)
-(defvar helm-input-idle-delay)
+(require 'helm)
+(require 'helm-org)
 
 ;;;; Variables
 
