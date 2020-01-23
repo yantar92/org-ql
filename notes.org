@@ -461,6 +461,8 @@ One of the things in that branch is =org-ql-item=, which is a struct used to car
 
 Another idea for it is to simply store the element from =org-element-headline-parser= in one of its slots, and populate all of the other slots lazily, like =ts=.  It already does that for a couple of slots, but I think it makes sense to do it for all of them, to reduce the overhead of making the struct for every query result.
 
+[2020-01-23 Thu 17:53]  Jonas has [[https://emacsair.me/2020/01/23/magit-section/][released]] =magit-section= as a standalone library!  It might still be preferable to use a bespoke implementation, but we'll see.
+
 *** TODO Experiment with =widget=
 
 The code that powers the customization UI.  Has collapsible and customizable widgets.  Might be perfect.  Might even enable editing items in the list, with functions to make the changes in the source  buffers.
