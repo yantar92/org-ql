@@ -242,7 +242,8 @@ returns nil or non-nil."
     (pcase sort
       (`nil items)
       ((guard (cl-loop for elem in (-list sort)
-                       always (memq elem '(date deadline scheduled todo priority random))))
+                       always (string-match (rx bos (or "date" "deadline" "scheduled" "todo" "priority" "random"))
+                                            (symbol-name elem))))
        ;; Default sorting functions
        (org-ql--sort-by items (-list sort)))
       ;; Sort by user-given comparator.
@@ -1424,33 +1425,67 @@ of the line after the heading."
 PREDICATES is a list of one or more sorting methods, including:
 `deadline', `scheduled', and `priority'."
   ;; MAYBE: Use macrolet instead of flet.
-  (cl-flet* ((sorter (symbol)
-                     (pcase symbol
-                       ((or 'deadline 'scheduled)
-                        (apply-partially #'org-ql--date-type< (intern (concat ":" (symbol-name symbol)))))
-                       ;; TODO: Rename `date' to `planning'.  `date' should be something else.
-                       ('date #'org-ql--date<)
-                       ('priority #'org-ql--priority<)
-                       ('random (lambda (&rest _ignore)
-                                  (= 0 (random 2))))
-                       ;; NOTE: 'todo is handled below
-                       ;; TODO: Add more.
-                       (_ (user-error "Invalid sorting predicate: %s" symbol))))
-             (sort-by-todo-keyword (items)
-                                   (let* ((grouped-items (--group-by (when-let (keyword (org-element-property :todo-keyword it))
-                                                                       (substring-no-properties keyword))
-                                                                     items))
-                                          (sorted-groups (cl-sort grouped-items #'<
-                                                                  :key (lambda (keyword)
-                                                                         (or (cl-position (car keyword) org-todo-keywords-1 :test #'string=)
-                                                                             ;; Put at end of list if not found
-                                                                             (1+ (length org-todo-keywords-1)))))))
-                                     (-flatten-n 1 (-map #'cdr sorted-groups)))))
-    (cl-loop for pred in (nreverse predicates)
-             do (setq items (if (eq pred 'todo)
-                                (sort-by-todo-keyword items)
-                              (-sort (sorter pred) items)))
-             finally return items)))
+  (cl-loop for pred in (nreverse predicates)
+           do (setq items (pcase-exhaustive pred
+                            ((or 'todo 'todo<)
+                             (org-ql--sort-todo items))
+                            ('random (-sort (lambda (_a _b) (zerop (random 2))) items))
+                            (_ (-sort (org-ql--sorter-fn pred) items))))
+           finally return items))
+
+(defun org-ql--sorter-fn (symbol)
+  "Return sorter function for SYMBOL."
+  (-let* ((name (symbol-name symbol))
+          (_ (string-match (rx (group (minimal-match (1+ anything)))
+                               (group (optional (or "<" ">")))
+                               eos)
+                           name))
+          (type (match-string 1 name))
+          (comparator (match-string 2 name))
+          ((base-name type-arg) (pcase type
+                                  ((rx bos (or "deadline" "scheduled"))
+                                   (list "date-type" (intern (concat ":" type))))
+                                  ((rx bos (or "date" "priority" "todo" "priority"))
+                                   (list type nil))))
+          (fn (pcase comparator
+                ((or "<" "")
+                 (intern (concat "org-ql--" base-name "<")))
+                (">" `(lambda (a b)
+                        (not (funcall #',(intern (concat "org-ql--" base-name "<"))
+                                      a b)))))))
+    (pcase type-arg
+      ('nil fn)
+      (_ (apply-partially fn type-arg)))))
+
+(defun org-ql--sort-todo (items)
+  "Return ITEMS sorted by to-do keyword."
+  (cl-labels ((all-keywords (keywords)
+                            (->> (append (-map #'non-done-states keywords) (-map #'done-states keywords))
+                                 -flatten (-map #'without-parens)))
+              (done-states (list)
+                           (setf list (cdr list))
+                           (if-let ((divider-pos (seq-position list "|")))
+                               (seq-subseq list (1+ divider-pos))
+                             (-last-item list)))
+              (non-done-states (list)
+                               (setf list (cdr list))
+                               (if-let ((divider-pos (seq-position list "|")))
+                                   (seq-subseq list 0 divider-pos)
+                                 (butlast list)))
+              (without-parens (keyword)
+                              (substring keyword 0 (seq-position keyword 40))))
+    (let* ((all-keywords (all-keywords org-todo-keywords))
+           (grouped-items
+            (--group-by (when-let (keyword (org-element-property :todo-keyword it))
+                          (substring-no-properties keyword))
+                        items))
+           (sorted-groups
+            (cl-sort grouped-items #'<
+                     :key (lambda (group)
+                            (or (cl-position (car group) all-keywords :test #'string=)
+                                ;; Put at end of list if not found
+                                (1+ (length all-keywords)))))))
+      (-flatten-n 1 (-map #'cdr sorted-groups)))))
 
 ;; TODO: Rewrite date sorters using `ts'.
 

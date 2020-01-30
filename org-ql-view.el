@@ -851,10 +851,15 @@ property."
   (let ((input (->> (completing-read-multiple "Sort by: "
                                               (list "buffer-order"
                                                     "date"
+                                                    "date>"
                                                     "deadline"
+                                                    "deadline>"
                                                     "priority"
+                                                    "priority>"
                                                     "scheduled"
-                                                    "todo")
+                                                    "scheduled>"
+                                                    "todo"
+                                                    "random")
                                               nil nil (when org-ql-view-sort
                                                         (prin1-to-string org-ql-view-sort)))
                     (--remove (equal "buffer-order" it)))))
