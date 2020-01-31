@@ -48,9 +48,7 @@
 
 (defvar helm-org-ql-map
   (let ((map (copy-keymap helm-map))
-        (mappings '(
-                    "C-x C-s" helm-org-ql-save
-                    )))
+        (mappings '("C-x C-s" helm-org-ql-save)))
     (cl-loop for (key fn) on mappings by #'cddr
              do (define-key map (kbd key) fn))
     map)
