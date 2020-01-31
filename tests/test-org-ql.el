@@ -116,13 +116,13 @@ Based on Buttercup macro `it'."
   (if body
       `(progn
          (buttercup-it ,(concat description " (preamble)   ")
-                       (lambda ()
-                         (let ((org-ql-use-preamble t))
-                           ,@body)))
+           (lambda ()
+             (let ((org-ql-use-preamble t))
+               ,@body)))
          (buttercup-it ,(concat description " (no preamble)")
-                       (lambda ()
-                         (let ((org-ql-use-preamble nil))
-                           ,@body))))
+           (lambda ()
+             (let ((org-ql-use-preamble nil))
+               ,@body))))
     `(buttercup-xit ,description)))
 
 (cl-defmacro org-ql-expect (ql-args results &key (buffer 'org-ql-test-buffer))

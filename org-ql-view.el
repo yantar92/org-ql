@@ -519,7 +519,7 @@ return an empty string."
                        (org-element-property :raw-value it)
                        (org-link-display-format it)))
            (todo-keyword (-some--> (org-element-property :todo-keyword element)
-                                   (org-ql-view--add-todo-face it)))
+                           (org-ql-view--add-todo-face it)))
            ;; FIXME: Figure out whether I should use `org-agenda-use-tag-inheritance' or `org-use-tag-inheritance', etc.
            (tag-list (if org-use-tag-inheritance
                          ;; FIXME: Note that tag inheritance cannot be used here unless markers are
@@ -542,9 +542,9 @@ return an empty string."
                               (org-add-props it nil 'face 'org-tag))))
            ;;  (category (org-element-property :category element))
            (priority-string (-some->> (org-element-property :priority element)
-                                      (char-to-string)
-                                      (format "[#%s]")
-                                      (org-ql-view--add-priority-face)))
+                              (char-to-string)
+                              (format "[#%s]")
+                              (org-ql-view--add-priority-face)))
            (habit-property (org-with-point-at (org-element-property :begin element)
                              (when (org-is-habit-p)
                                (org-habit-parse-todo))))
