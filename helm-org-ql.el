@@ -212,16 +212,19 @@ WINDOW-WIDTH should be the width of the Helm window."
   ;; buffer, unless we manually called `org-ql' in each buffer, which
   ;; I'd prefer not to do.  Maybe I should add a feature to `org-ql' to
   ;; call a setup function in a buffer before running queries.
-  (let* ((prefix (concat (buffer-name) ":"))
+  (let* ((prefix (org-entry-get (point) "CATEGORY") )
          (width (- window-width (length prefix)))
          (heading (org-get-heading t))
-         (path (-> (org-get-outline-path)
-                   (org-format-outline-path width nil "")
-                   (org-split-string "")))
-         (path (if helm-org-ql-reverse-paths
-                   (concat heading "\\" (s-join "\\" (nreverse path)))
-                 (concat (s-join "/" path) "/" heading))))
-    (cons (concat prefix path) (point-marker))))
+         ;; (path (-> (org-get-outline-path)
+         ;;           (org-format-outline-path width nil "")
+         ;;           (org-split-string "")))
+         ;; (path (if helm-org-ql-reverse-paths
+         ;;           (concat heading "\\" (s-join "\\" (nreverse path)))
+         ;;         (concat (s-join "/" path) "/" heading)))
+         )
+    (cons ;; (concat prefix path)
+     (format "%10s: %s" prefix heading)
+     (point-marker))))
 
 ;;;; Footer
 
