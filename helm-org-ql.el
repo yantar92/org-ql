@@ -128,10 +128,12 @@ Is transformed into this query:
           :sources (helm-org-ql-source buffers-files :name name))))
 
 ;;;###autoload
-(defun helm-org-ql-agenda-files ()
-  "Search agenda files with `helm-org-ql', which see."
-  (interactive)
-  (helm-org-ql (org-agenda-files) :name "Org Agenda Files"))
+(defun helm-org-ql-agenda-files (arg)
+  "Search agenda files with `helm-org-ql', which see.
+Also search archives when called with prefix argument."
+  (interactive "P")
+  (let ((files (if arg (org-agenda-files t t) (org-agenda-files t))))
+    (helm-org-ql files :name "Org Agenda Files")))
 
 ;;;###autoload
 (defun helm-org-ql-org-directory ()
