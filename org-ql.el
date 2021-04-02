@@ -669,6 +669,9 @@ Arguments STRING, POS, FILL, and LEVEL are according to
 
 (require 'peg)
 
+(defcustom org-ql-plain-string-predicate 'regexp
+  "Default predicate used to interpret plain string in string query.")
+
 (defun org-ql--def-query-string-to-sexp-fn (predicates)
   "Define function `org-ql--query-string-to-sexp' according to PREDICATES.
 Builds the PEG expression using PREDICATES (which should be the
@@ -694,7 +697,7 @@ value of `org-ql-predicates')."
                            positive-term))
                  (positive-term (or (and predicate-with-args `(pred args -- (cons (intern pred) args)))
                                     (and predicate-without-args `(pred -- (list (intern pred))))
-                                    (and plain-string `(s -- (list 'regexp s)))))
+                                    (and plain-string `(s -- (list org-ql-plain-string-predicate s)))))
                  (plain-string (or quoted-arg unquoted-arg))
                  (predicate-with-args (substring predicate) ":" args)
                  (predicate-without-args (substring predicate) ":")
