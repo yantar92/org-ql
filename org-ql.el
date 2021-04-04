@@ -1017,8 +1017,9 @@ predicates."
                  (setq regexps (delete-dups (delete regexp-max regexps)))
                  (setq queries (reverse queries))
                  (when regexps (push `(regexp ,@regexps) queries))
-                 (list :regexp regexp-max :case-fold case-fold-max :query `(org-ql--and ,@queries)))))
-  :body (-all-p #'identity clauses))
+                 (list :regexp regexp-max
+                       :case-fold case-fold-max
+                       :query `(and ,@queries))))))
 
 (org-ql-defpred org-ql--or (&rest clauses)
   "Return non-nil if any of the clauses match."
@@ -1044,37 +1045,30 @@ predicates."
                                  (and regexps
                                       (rx-to-string `(or ,@(mapcar (lambda (re) `(regex ,re)) regexps)))))
                        :case-fold t
-                       :query `(org-ql--or ,@queries)))))
-  :body (save-excursion (-any-p #'identity clauses)))
+                       :query `(save-excursion (or ,@queries)))))))
 
 (org-ql-defpred org-ql--when (condition &rest clauses)
   "Return values of CLAUSES when CONDITION is non-nil."
   :normalizers
-  ((`(,predicate-names ,condition . ,clauses) `(org-ql--when ,(rec condition)
-                                                       ,@(mapcar #'rec clauses))))
+  ((`(,predicate-names ,condition . ,clauses) `(when ,(rec condition)
+                                                 ,@(mapcar #'rec clauses))))
   :preambles
   ((`(,predicate-names ,condition . ,clauses)
-    (rec `(org-ql--and ,condition ,(last clauses)))))
-  :body
-  (when condition (eval `(progn ,@clauses))))
+    (rec `(org-ql--and ,condition ,(last clauses))))))
 
 (org-ql-defpred org-ql--unless (condition &rest clauses)
   "Return values of CLAUSES unless CONDITION is non-nil."
   :normalizers
-  ((`(,predicate-names ,condition . ,clauses) `(org-ql--unless ,(rec condition)
-                                                         ,@(mapcar #'rec clauses))))
+  ((`(,predicate-names ,condition . ,clauses) `(unless (save-excursion ,(rec condition))
+                                                 ,@(mapcar #'rec clauses))))
   :preambles
   ((`(,predicate-names ,condition . ,clauses)
-    (rec ,(last clauses))))
-  :body
-  (unless (save-excursion condition) (eval `(progn ,@clauses))))
+    (rec ,(last clauses)))))
 
 (org-ql-defpred org-ql--not (clauses)
   "Match when CLAUSES don't match."
   :normalizers
-  ((`(,predicate-names . ,clauses) `(org-ql--not ,@(mapcar #'rec clauses))))
-  :body
-  (save-excursion (not clauses)))
+  ((`(,predicate-names . ,clauses) `(save-excursion (not ,@(mapcar #'rec clauses))))))
 
 (org-ql-defpred category (&rest categories)
   "Return non-nil if current heading is in one or more of CATEGORIES (a list of strings)."
