@@ -772,16 +772,8 @@ This function is defined by calling
 defined in `org-ql-predicates' by calling `org-ql-defpred'."
               (cl-labels ((rec (element)
                                (pcase element
-                                 (`(or . ,clauses) (rec `(org-ql--or ,@clauses)))
-                                 (`(and . ,clauses) (rec `(org-ql--and ,@clauses)))
-                                 (`(not . ,clauses) (rec `(org-ql--not ,@clauses)))
-                                 (`(when ,condition . ,clauses) (rec `(org-ql--when ,condition ,@clauses)))
-                                 (`(unless ,condition . ,clauses) (rec `(org-ql--unless ,condition ,@clauses)))
-                                 ;; TODO: Combine (regexp) when appropriate (i.e. inside an OR, not an AND).
                                  ((pred stringp) `(regexp ,element))
-
                                  ,@normalizer-patterns
-
                                  ;; Any other form: passed through unchanged.
                                  (_ element))))
                 (rec query)))))))
@@ -822,11 +814,6 @@ defined in `org-ql-predicates' by calling `org-ql-defpred'."
                ('nil (list :query query :preamble nil))
                (_ (cl-labels ((rec (element)
                                    (pcase element
-                                     (`(or . ,query) (rec `(org-ql--or ,@query)))
-                                     (`(and . ,query) (rec `(org-ql--and ,@query)))
-                                     (`(not . ,query) (rec `(org-ql--not ,@query)))
-                                     (`(when . ,query) (rec `(org-ql--when ,@query)))
-                                     (`(unless . ,query) (rec `(org-ql--unless ,@query)))
                                      ,@preamble-patterns
                                      (_ (list :query element)))))
                     (-let* (((&plist :regexp :case-fold :query) (funcall #'rec query)))
@@ -999,76 +986,74 @@ predicates."
 
 (org-ql-defpred org-ql--and (&rest clauses)
   "Return non-nil if all the clauses match."
-  :normalizers ((`(,predicate-names)
+  :normalizers ((`(and)
                  nil)
-                (`(,predicate-names . ,clauses)
+                (`(and . ,clauses)
                  `(and ,@(mapcar #'rec clauses))))
-  :preambles ((`(,predicate-names . ,clauses)
+  :preambles ((`(and . ,clauses)
                (let ((preambles (mapcar #'rec clauses))
                      regexps regexp-max case-fold-max queries)
                  (dolist (preamble preambles)
                    (-let* (((&plist :regexp :case-fold :query) preamble))
                      ;; Take the longest regexp.  It should be hardest to match.
-                     (when regexp (push regexp regexps))
                      (when (length> regexp (length regexp-max))
                        (setq regexp-max regexp)
-                       (setq case-fold-max case-fold))
-                     (when (and query (not (eq t query))) (push query queries))))
-                 (setq regexps (delete-dups (delete regexp-max regexps)))
-                 (setq queries (reverse queries))
-                 (when regexps (push `(regexp ,@regexps) queries))
+                       (setq case-fold-max case-fold))))
                  (list :regexp regexp-max
                        :case-fold case-fold-max
-                       :query `(and ,@queries))))))
+                       :query `(and ,@clauses))))))
 
 (org-ql-defpred org-ql--or (&rest clauses)
   "Return non-nil if any of the clauses match."
-  :normalizers ((`(,predicate-names)
+  :normalizers ((`(or)
                  nil)
-                (`(,predicate-names . ,clauses)
+                (`(or . ,clauses)
                  `(or ,@(mapcar #'rec clauses))))
-  :preambles ((`(,predicate-names . ,clauses)
+  :preambles ((`(or . ,clauses)
                (let ((preambles (mapcar #'rec clauses))
-                     regexps regexp-null-p queries)
+                     regexps regexp-null-p)
                  (dolist (preamble preambles)
                    (-let* (((&plist :regexp :case-fold :query) preamble))
                      ;; Collect regexps for combining.
                      (if regexp (push regexp regexps)
-                       (setq regexp-null-p t))
-                     ;; Make sure that predicates relying just on
-                     ;; case-sensitive regexp work.
-                     (when (and case-fold regexp (eq t query))
-                       (push `(regexp ,regexp) queries))
-                     (when (and query (not (eq t query))) (push query queries))))
-                 (setq queries (reverse queries))
+                       (setq regexp-null-p t))))
                  (list :regexp (unless regexp-null-p
                                  (and regexps
                                       (rx-to-string `(or ,@(mapcar (lambda (re) `(regex ,re)) regexps)))))
                        :case-fold t
-                       :query `(save-excursion (or ,@queries)))))))
+                       :query `(save-excursion (or ,@clauses)))))))
 
 (org-ql-defpred org-ql--when (condition &rest clauses)
   "Return values of CLAUSES when CONDITION is non-nil."
   :normalizers
-  ((`(,predicate-names ,condition . ,clauses) `(when ,(rec condition)
-                                                 ,@(mapcar #'rec clauses))))
+  ((`(when ,condition . ,clauses)
+    `(when ,(rec condition)
+       ,@(mapcar #'rec clauses))))
   :preambles
-  ((`(,predicate-names ,condition . ,clauses)
-    (rec `(and ,condition ,(last clauses))))))
+  ((`(when ,condition . ,clauses)
+    (-let* (((&plist :regexp :case-fold :query) (rec `(and ,condition ,(last clauses)))))
+      (list :regexp regexp
+            :case-fold case-fold
+            :query `(when ,condition ,@clauses))))))
 
 (org-ql-defpred org-ql--unless (condition &rest clauses)
   "Return values of CLAUSES unless CONDITION is non-nil."
   :normalizers
-  ((`(,predicate-names ,condition . ,clauses) `(unless (save-excursion ,(rec condition))
-                                                 ,@(mapcar #'rec clauses))))
+  ((`(unless ,condition . ,clauses)
+    `(unless (save-excursion ,(rec condition))
+       ,@(mapcar #'rec clauses))))
   :preambles
-  ((`(,predicate-names ,condition . ,clauses)
-    (rec ,(last clauses)))))
+  ((`(unless ,condition . ,clauses)
+    (-let* (((&plist :regexp :case-fold :query) (rec ,(last clauses))))
+      (list :regexp regexp
+            :case-fold case-fold
+            :query `(unless ,condition ,@clauses))))))
 
 (org-ql-defpred org-ql--not (clauses)
   "Match when CLAUSES don't match."
   :normalizers
-  ((`(,predicate-names . ,clauses) `(save-excursion (not ,@(mapcar #'rec clauses))))))
+  ((`(not . ,clauses)
+    `(save-excursion (not ,@(mapcar #'rec clauses))))))
 
 (org-ql-defpred category (&rest categories)
   "Return non-nil if current heading is in one or more of CATEGORIES (a list of strings)."
