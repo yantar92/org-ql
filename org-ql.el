@@ -1002,7 +1002,7 @@ predicates."
   :normalizers ((`(,predicate-names)
                  nil)
                 (`(,predicate-names . ,clauses)
-                 `(org-ql--and ,@(mapcar #'rec clauses))))
+                 `(and ,@(mapcar #'rec clauses))))
   :preambles ((`(,predicate-names . ,clauses)
                (let ((preambles (mapcar #'rec clauses))
                      regexps regexp-max case-fold-max queries)
@@ -1026,7 +1026,7 @@ predicates."
   :normalizers ((`(,predicate-names)
                  nil)
                 (`(,predicate-names . ,clauses)
-                 `(org-ql--or ,@(mapcar #'rec clauses))))
+                 `(or ,@(mapcar #'rec clauses))))
   :preambles ((`(,predicate-names . ,clauses)
                (let ((preambles (mapcar #'rec clauses))
                      regexps regexp-null-p queries)
@@ -1054,7 +1054,7 @@ predicates."
                                                  ,@(mapcar #'rec clauses))))
   :preambles
   ((`(,predicate-names ,condition . ,clauses)
-    (rec `(org-ql--and ,condition ,(last clauses))))))
+    (rec `(and ,condition ,(last clauses))))))
 
 (org-ql-defpred org-ql--unless (condition &rest clauses)
   "Return values of CLAUSES unless CONDITION is non-nil."
@@ -1501,7 +1501,7 @@ Tests both inherited and local tags."
 Tests both inherited and local tags."
   ;; MAYBE: -all versions for inherited and local.
   :normalizers ((`(,predicate-names) `(tags))
-                (`(,predicate-names . ,tags) `(org-ql--and ,@(--map `(tags ,it) tags))))
+                (`(,predicate-names . ,tags) `(and ,@(--map `(tags ,it) tags))))
   :body (apply #'org-ql--predicate-tags tags))
 
 (org-ql-defpred (tags-inherited inherited-tags tags-i itags) (&rest tags)
