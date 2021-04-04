@@ -992,7 +992,7 @@ predicates."
                  `(and ,@(mapcar #'rec clauses))))
   :preambles ((`(and . ,clauses)
                (let ((preambles (mapcar #'rec clauses))
-                     regexps regexp-max case-fold-max queries)
+                     regexps regexp-max case-fold-max)
                  (dolist (preamble preambles)
                    (-let* (((&plist :regexp :case-fold :query) preamble))
                      ;; Take the longest regexp.  It should be hardest to match.
