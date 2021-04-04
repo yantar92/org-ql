@@ -1605,7 +1605,7 @@ With KEYWORDS, return non-nil if its keyword is one of KEYWORDS (a list of strin
 (org-ql-defpred children (query)
   "Return non-nil if current entry has children matching QUERY."
   ;; Quote children queries so the user doesn't have to.
-  :normalizers ((`(,predicate-names ,query) `(children ,(rec query)))
+  :normalizers ((`(,predicate-names ,query) `(children ',query))
                 (`(,predicate-names) '(children (lambda () t))))
   :body
   (org-with-wide-buffer
@@ -1631,7 +1631,7 @@ With KEYWORDS, return non-nil if its keyword is one of KEYWORDS (a list of strin
   "Return non-nil if current entry has descendants matching QUERY."
   ;; TODO: This could probably be rewritten like the `ancestors' predicate,
   ;; which avoids calling `org-ql-select' recursively and its associated overhead.
-  :normalizers ((`(,predicate-names ,query) `(descendants ,(rec query)))
+  :normalizers ((`(,predicate-names ,query) `(descendants ',query))
                 (`(,predicate-names) '(descendants (lambda () t))))
   :body
   (org-with-wide-buffer
