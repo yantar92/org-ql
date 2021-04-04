@@ -1013,7 +1013,7 @@ predicates."
                      (when (length> regexp (length regexp-max))
                        (setq regexp-max regexp)
                        (setq case-fold-max case-fold))
-                     (when query (push query queries))))
+                     (when (and query (not (eq t query))) (push query queries))))
                  (setq regexps (delete-dups (delete regexp-max regexps)))
                  (setq queries (reverse queries))
                  (when regexps (push `(regexp ,@regexps) queries))
