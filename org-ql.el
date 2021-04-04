@@ -774,11 +774,9 @@ defined in `org-ql-predicates' by calling `org-ql-defpred'."
                                (pcase element
                                  (`(or . ,clauses) (rec `(org-ql--or ,@clauses)))
                                  (`(and . ,clauses) (rec `(org-ql--and ,@clauses)))
-                                 (`(not . ,clauses) `(not ,@(mapcar #'rec clauses)))
-                                 (`(when ,condition . ,clauses) `(when ,(rec condition)
-                                                                   ,@(mapcar #'rec clauses)))
-                                 (`(unless ,condition . ,clauses) `(unless ,(rec condition)
-                                                                     ,@(mapcar #'rec clauses)))
+                                 (`(not . ,clauses) (rec `(org-ql--not ,@clauses)))
+                                 (`(when ,condition . ,clauses) (rec `(org-ql--when ,condition ,@clauses)))
+                                 (`(unless ,condition . ,clauses) (rec `(org-ql--unless ,condition ,@clauses)))
                                  ;; TODO: Combine (regexp) when appropriate (i.e. inside an OR, not an AND).
                                  ((pred stringp) `(regexp ,element))
 
@@ -824,8 +822,11 @@ defined in `org-ql-predicates' by calling `org-ql-defpred'."
                ('nil (list :query query :preamble nil))
                (_ (cl-labels ((rec (element)
                                    (pcase element
-                                     (`(or . ,query) (funcall #'rec `(org-ql--or ,@query)))
-                                     (`(and . ,query) (funcall #'rec `(org-ql--and ,@query)))
+                                     (`(or . ,query) (rec `(org-ql--or ,@query)))
+                                     (`(and . ,query) (rec `(org-ql--and ,@query)))
+                                     (`(not . ,query) (rec `(org-ql--not ,@query)))
+                                     (`(when . ,query) (rec `(org-ql--when ,@query)))
+                                     (`(unless . ,query) (rec `(org-ql--unless ,@query)))
                                      ,@preamble-patterns
                                      (_ (list :query element)))))
                     (-let* (((&plist :regexp :case-fold :query) (funcall #'rec query)))
@@ -1044,7 +1045,36 @@ predicates."
                                       (rx-to-string `(or ,@(mapcar (lambda (re) `(regex ,re)) regexps)))))
                        :case-fold t
                        :query `(org-ql--or ,@queries)))))
-  :body (-any-p #'identity clauses))
+  :body (save-excursion (-any-p #'identity clauses)))
+
+(org-ql-defpred org-ql--when (condition &rest clauses)
+  "Return values of CLAUSES when CONDITION is non-nil."
+  :normalizers
+  ((`(,predicate-names ,condition . ,clauses) `(org-ql--when ,(rec condition)
+                                                       ,@(mapcar #'rec clauses))))
+  :preambles
+  ((`(,predicate-names ,condition . ,clauses)
+    (rec `(org-ql--and ,condition ,(last clauses)))))
+  :body
+  (when condition (eval `(progn ,@clauses))))
+
+(org-ql-defpred org-ql--unless (condition &rest clauses)
+  "Return values of CLAUSES unless CONDITION is non-nil."
+  :normalizers
+  ((`(,predicate-names ,condition . ,clauses) `(org-ql--unless ,(rec condition)
+                                                         ,@(mapcar #'rec clauses))))
+  :preambles
+  ((`(,predicate-names ,condition . ,clauses)
+    (rec ,(last clauses))))
+  :body
+  (unless (save-excursion condition) (eval `(progn ,@clauses))))
+
+(org-ql-defpred org-ql--not (clauses)
+  "Match when CLAUSES don't match."
+  :normalizers
+  ((`(,predicate-names . ,clauses) `(org-ql--not ,@(mapcar #'rec clauses))))
+  :body
+  (save-excursion (not clauses)))
 
 (org-ql-defpred category (&rest categories)
   "Return non-nil if current heading is in one or more of CATEGORIES (a list of strings)."
