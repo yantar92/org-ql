@@ -1001,7 +1001,7 @@ predicates."
                                  ((eq query t) (setq query `(regexp ,regexp)))
                                  ((not query) (setq query `(regexp ,regexp)))
                                  (t nil))
-                              (setq query clause))
+                              (unless query (setq query clause)))
                             (push query queries)
                             ;; Take the longest regexp.  It should be hardest to match.
                             (when (length> regexp (length regexp-max))
@@ -1028,9 +1028,8 @@ predicates."
                             (if regexp
                                 (cond
                                  ((eq query t) (setq query `(regexp ,regexp)))
-                                 ((not query) (setq query `(regexp ,regexp)))
-                                 (t nil))
-                              (setq query clause))
+                                 ((not query) (setq query `(regexp ,regexp))))
+                              (unless query (setq query clause)))
                             (push query queries)
                             ;; Collect regexps for combining.
                             (if regexp (push regexp regexps)
@@ -1040,9 +1039,7 @@ predicates."
                                  (and regexps
                                       (rx-to-string `(or ,@(mapcar (lambda (re) `(regex ,re)) regexps)))))
                        :case-fold t
-                       :query (if regexp-null-p
-                                  `(save-excursion (or ,@clauses))
-                                `(save-excursion (or ,@queries))))))))
+                       :query `(or ,@(mapcar (lambda (clause) `(save-excursion ,clause)) queries)))))))
 
 (org-ql-defpred org-ql--when (condition &rest clauses)
   "Return values of CLAUSES when CONDITION is non-nil."
@@ -1055,7 +1052,7 @@ predicates."
     (-let* (((&plist :regexp :case-fold :query) (rec `(and ,condition ,(last clauses)))))
       (list :regexp regexp
             :case-fold case-fold
-            :query `(when ,condition ,@clauses))))))
+            :query `(when ,condition ,@(mapcar (lambda (clause) `(save-excursion ,clause)) (butlast clauses)) ,(last clauses)))))))
 
 (org-ql-defpred org-ql--unless (condition &rest clauses)
   "Return values of CLAUSES unless CONDITION is non-nil."
@@ -1068,7 +1065,7 @@ predicates."
     (-let* (((&plist :regexp :case-fold :query) (rec ,(last clauses))))
       (list :regexp regexp
             :case-fold case-fold
-            :query `(unless ,condition ,@clauses))))))
+            :query `(unless (save-excursion ,condition) ,@(mapcar (lambda (clause) `(save-excursion ,clause)) (butlast clauses)) ,(last clauses)))))))
 
 (org-ql-defpred org-ql--not (clauses)
   "Match when CLAUSES don't match."
