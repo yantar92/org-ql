@@ -367,7 +367,8 @@ If NARROW is non-nil, buffer will not be widened."
       (unless narrow
         (widen))
       (goto-char (point-min))
-      (when (org-before-first-heading-p)
+      (when (and (org-before-first-heading-p)
+                 (not (org-at-heading-p)))
         (outline-next-heading))
       (if (not (org-at-heading-p))
           (progn
