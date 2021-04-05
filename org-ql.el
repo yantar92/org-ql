@@ -819,7 +819,8 @@ defined in `org-ql-predicates' by calling `org-ql-defpred'."
                                      (_ (list :query element)))))
                     (-let* (((&plist :regexp :case-fold :query) (funcall #'rec query)))
                       (setq query (pcase query
-                                    ((or `(nil)
+                                    ((or `nil
+                                         `(nil)
                                          `((nil))
                                          `((and))
                                          `((or)))
