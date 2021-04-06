@@ -1006,7 +1006,7 @@ predicates."
 (setf org-ql-defpred-defer t)
 
 (org-ql-defpred org-ql--and (&rest _)
-  "Return non-nil if all the clauses match."
+  "Normalizers and preambles for boolean (and ...) query."
   :normalizers ((`(and)
                  nil)
                 (`(and . ,clauses)
@@ -1035,7 +1035,7 @@ predicates."
                        :query `(and ,@queries))))))
 
 (org-ql-defpred org-ql--or (&rest _)
-  "Return non-nil if any of the clauses match."
+  "Normalizers and preambles for boolean (or ...) query."
   :normalizers ((`(or)
                  nil)
                 (`(or . ,clauses)
@@ -1063,8 +1063,8 @@ predicates."
                        :case-fold t
                        :query `(or ,@queries))))))
 
-(org-ql-defpred org-ql--when (_ &rest _)
-  "Return values of CLAUSES when CONDITION is non-nil."
+(org-ql-defpred org-ql--when (&rest _)
+  "Normalizers and preambles for (when ...) query."
   :normalizers
   ((`(when ,condition . ,clauses)
     `(when ,(org-ql-normalize-query condition)
@@ -1076,8 +1076,8 @@ predicates."
             :case-fold case-fold
             :query `(when ,condition ,@clauses))))))
 
-(org-ql-defpred org-ql--unless (_ &rest _)
-  "Return values of CLAUSES unless CONDITION is non-nil."
+(org-ql-defpred org-ql--unless (&rest _)
+  "Normalizers and preambles for (unless ...) query."
   :normalizers
   ((`(unless ,condition . ,clauses)
     `(unless ,(org-ql-normalize-query condition)
@@ -1090,7 +1090,7 @@ predicates."
             :query `(unless ,condition ,@clauses))))))
 
 (org-ql-defpred org-ql--not (_)
-  "Match when CLAUSES don't match."
+  "Normalizers and preambles for (not ...) query."
   :normalizers
   ((`(not . ,clauses)
     `(not ,@(mapcar #'org-ql-normalize-query clauses)))))
