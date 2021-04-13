@@ -93,7 +93,7 @@ Based on `helm-map'.")
 
 ;;;###autoload
 (cl-defun helm-org-ql (buffers-files
-                       &key (boolean 'and) (name "helm-org-ql"))
+                       &key (boolean 'and) (name "helm-org-ql") (narrow nil))
   "Display results in BUFFERS-FILES for an `org-ql' non-sexp query using Helm.
 Interactively, search the current buffer.  Note that this command
 only accepts non-sexp, \"plain\" queries.
@@ -125,7 +125,7 @@ Is transformed into this query:
   (let ((boolean (if current-prefix-arg 'or boolean))
         (helm-input-idle-delay helm-org-ql-input-idle-delay))
     (helm :prompt (format "Query (boolean %s): " (-> boolean symbol-name upcase))
-          :sources (helm-org-ql-source buffers-files :name name))))
+          :sources (helm-org-ql-source buffers-files :name name :narrow narrow))))
 
 ;;;###autoload
 (defun helm-org-ql-agenda-files (arg)
@@ -176,7 +176,7 @@ Also search archives when called with prefix argument."
 ;;;; Functions
 
 ;;;###autoload
-(cl-defun helm-org-ql-source (buffers-files &key (name "helm-org-ql"))
+(cl-defun helm-org-ql-source (buffers-files &key (name "helm-org-ql") (narrow nil))
   "Return Helm source named NAME that searches BUFFERS-FILES with `helm-org-ql'."
   ;; Expansion of `helm-build-sync-source' macro.
   (let ((window-width (window-width (helm-window))))
@@ -208,7 +208,8 @@ Also search archives when called with prefix argument."
                         (ignore-errors
                           ;; Ignore errors that might be caused by partially typed queries.
                           (org-ql-select buffers-files query
-                            :action `(point-marker))))))
+                            :action `(point-marker)
+                            :narrow narrow)))))
       :match #'identity
       :fuzzy-match nil
       :multimatch nil
