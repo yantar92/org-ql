@@ -1068,7 +1068,7 @@ predicates."
        ,@(mapcar #'org-ql-normalize-query clauses))))
   :preambles
   ((`(when ,condition . ,clauses)
-    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble `(and ,condition ,(last clauses)))))
+    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble `(and ,condition ,(car (last clauses))))))
       (list :regexp regexp
             :case-fold case-fold
             :query `(when ,condition ,@clauses))))))
@@ -1081,7 +1081,7 @@ predicates."
        ,@(mapcar #'org-ql-normalize-query clauses))))
   :preambles
   ((`(unless ,condition . ,clauses)
-    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble ,(last clauses))))
+    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble (car (last clauses)))))
       (list :regexp regexp
             :case-fold case-fold
             :query `(unless ,condition ,@clauses))))))
