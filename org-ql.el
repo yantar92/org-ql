@@ -1019,10 +1019,8 @@ predicates."
                           do
                           (-let* (((&plist :regexp :case-fold :query) preamble))
                             (if regexp
-                                (cond
-                                 ((eq query t) (setq query `(regexp ,regexp)))
-                                 ((not query) (setq query `(regexp ,regexp)))
-                                 (t nil))
+                                (when (or (not query) (eq query t))
+                                  (setq query `(regexp ,regexp)))
                               (unless query (setq query clause)))
                             (push query queries)
                             ;; Take the longest regexp.  It should be hardest to match.
@@ -1048,9 +1046,8 @@ predicates."
                           do
                           (-let* (((&plist :regexp :case-fold :query) preamble))
                             (if regexp
-                                (cond
-                                 ((eq query t) (setq query `(regexp ,regexp)))
-                                 ((not query) (setq query `(regexp ,regexp))))
+                                (when (or (not query) (eq query t))
+                                  (setq query `(regexp ,regexp)))
                               (unless query (setq query clause)))
                             (push query queries)
                             ;; Collect regexps for combining.
