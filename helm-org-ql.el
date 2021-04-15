@@ -187,7 +187,7 @@ Also search archives when called with prefix argument."
                                                     (helm-org-ql--heading window-width)))
                                                 candidate-markers))
       :candidates (lambda ()
-                    (let* ((query (org-ql--query-string-to-sexp helm-pattern)))
+                    (let* ((query (org-ql--query-string-to-sexp (string-clean-whitespace helm-pattern))))
                       (when query
                         (with-current-buffer (helm-buffer-get)
                           (setq helm-org-ql-buffers-files buffers-files))
