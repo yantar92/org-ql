@@ -304,7 +304,7 @@ RESULTS should be a list of strings as returned by
       (it "all clauses have preambles"
         (expect (org-ql--query-preamble '(or (regexp "a") (regexp "b")))
                 :to-equal (list :query '(or (regexp "a") (regexp "b"))
-                                :preamble (rx-to-string `(or (regexp "a") (regexp "b")))
+                                :preamble (rx-to-string `(or (regexp "b") (regexp "a")))
                                 :preamble-case-fold t)))
       (it "some clauses miss preambles"
         (expect (org-ql--query-preamble '(or (regexp "a") (+ 1 1)))
