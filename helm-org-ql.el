@@ -193,9 +193,10 @@ Also search archives when called with prefix argument."
                           (setq helm-org-ql-buffers-files buffers-files))
                         (ignore-errors
                           ;; Ignore errors that might be caused by partially typed queries.
-                          (org-ql-select buffers-files query
-                            :action `(point-marker)
-                            :narrow narrow)))))
+                          (let ((inhibit-message t))
+                            (org-ql-select buffers-files query
+                              :action `(point-marker)
+                              :narrow narrow))))))
       :match #'identity
       :fuzzy-match nil
       :multimatch nil
