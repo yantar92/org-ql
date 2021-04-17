@@ -1074,10 +1074,10 @@ predicates."
        ,@(mapcar #'org-ql-normalize-query clauses))))
   :preambles
   ((`(when ,condition . ,clauses)
-    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble `(and ,condition ,(last clauses)))))
+    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble `(and ,condition ,(car (last clauses))))))
       (list :regexp regexp
             :case-fold case-fold
-            :query `(when ,condition ,@(mapcar (lambda (clause) `(save-excursion ,clause)) (butlast clauses)) ,(last clauses)))))))
+            :query `(when ,condition ,@(mapcar (lambda (clause) `(save-excursion ,clause)) (butlast clauses)) ,(car (last clauses))))))))
 
 (org-ql-defpred org-ql--unless (_ &rest _)
   "Return values of CLAUSES unless CONDITION is non-nil."
@@ -1087,10 +1087,10 @@ predicates."
        ,@(mapcar #'org-ql-normalize-query clauses))))
   :preambles
   ((`(unless ,condition . ,clauses)
-    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble ,(last clauses))))
+    (-let* (((&plist :regexp :case-fold :query) (org-ql-query-preamble (car (last clauses)))))
       (list :regexp regexp
             :case-fold case-fold
-            :query `(unless (save-excursion ,condition) ,@(mapcar (lambda (clause) `(save-excursion ,clause)) (butlast clauses)) ,(last clauses)))))))
+            :query `(unless (save-excursion ,condition) ,@(mapcar (lambda (clause) `(save-excursion ,clause)) (butlast clauses)) ,(car (last clauses))))))))
 
 (org-ql-defpred org-ql--not (_)
   "Match when CLAUSES don't match."
