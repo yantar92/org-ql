@@ -959,6 +959,27 @@ More optimal definition would be:
          (org-ql--define-query-preamble-fn (reverse org-ql-predicates))
          (org-ql--def-query-string-to-sexp-fn (reverse org-ql-predicates))))))
 
+(defmacro org-ql-defpred-alias (name args docstring query)
+  "Define an `org-ql' predicate alias to complex `org-ql' query.
+NAME may be a symbol or a list of symbols: if a list, the first
+is used as NAME and the rest are aliases.
+
+ARGS is a `cl-defun'-style argument list.  DOCSTRING is the
+function's docstring.
+
+QUERY is a valid `org-ql' query."
+  (declare (debug ([&or symbolp listp] listp stringp
+                   &rest (sexp query)))
+           (indent defun))
+  `(org-ql-defpred ,name ,args
+     ,docstring
+     :normalizers ((`(,predicate-names)
+                    (org-ql-normalize-query ',query)))
+     :preambles ((`(,predicate-names)
+                  (org-ql-query-preamble ',query)))
+     :body
+     ,query))
+
 (defmacro org-ql--from-to-on ()
   "For internal use.
 Expands into a form that processes arguments to timestamp-related
