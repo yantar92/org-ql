@@ -382,11 +382,15 @@ If NARROW is non-nil, buffer will not be widened."
         ;; TODO: Bind `case-fold-search' around the preamble loop.
         (cond (preamble (cl-loop while (let ((case-fold-search preamble-case-fold))
                                          (re-search-forward preamble nil t))
-                                 do (outline-back-to-heading 'invisible-ok)
-                                 when (funcall predicate)
+                                 do (org-back-to-heading 'invisible-ok)
+                                 when (and (not (and (featurep 'org-inlinetask)
+                                                   (org-inlinetask-end-p)))
+                                           (funcall predicate))
                                  collect (funcall action)
                                  do (outline-next-heading)))
-              (t (cl-loop when (funcall predicate)
+              (t (cl-loop when (and (not (and (featurep 'org-inlinetask)
+                                            (org-inlinetask-end-p)))
+                                    (funcall predicate))
                           collect (funcall action)
                           while (outline-next-heading))))))))
 
