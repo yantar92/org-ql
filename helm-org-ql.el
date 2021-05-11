@@ -78,6 +78,10 @@ Based on `helm-map'.")
   "Whether to reverse Org outline paths in `helm-org-ql' results."
   :type 'boolean)
 
+(defcustom helm-org-ql-show-paths t
+  "Whether to show Org outline paths in `helm-org-ql' results."
+  :type 'boolean)
+
 (defcustom helm-org-ql-input-idle-delay 0.25
   "Seconds to wait after typing stops before running query."
   :type 'number)
@@ -227,17 +231,23 @@ WINDOW-WIDTH should be the width of the Helm window."
   ;; I'd prefer not to do.  Maybe I should add a feature to `org-ql' to
   ;; call a setup function in a buffer before running queries.
   (let* ((prefix (org-entry-get (point) "CATEGORY") )
-         (width (- window-width (length prefix)))
-         (heading (org-get-heading t))
-         ;; (path (-> (org-get-outline-path)
-         ;;           (org-format-outline-path width nil "")
-         ;;           (org-split-string "")))
-         ;; (path (if helm-org-ql-reverse-paths
-         ;;           (concat heading "\\" (s-join "\\" (nreverse path)))
-         ;;         (concat (s-join "/" path) "/" heading)))
-         )
+         (heading-type (pcase (org-get-tags nil 'local)
+                         ((pred (member "grant")) "#proposal")
+                         ((pred (member "project")) "#project")
+                         ((pred (member "AREA")) "#area")
+                         ((pred (member "article")) "#article")
+                         ((pred (member "book") )"#book")
+                         (_ "")))
+         (width (- window-width 13))
+         (heading (s-truncate (- width (length heading-type)) (org-get-heading t nil t t)))
+         (path (-> (org-get-outline-path nil t)
+                 (org-format-outline-path width nil "")
+                 (org-split-string "")))
+         (path (if helm-org-ql-reverse-paths
+                   (concat heading "\\" (s-join "\\" (nreverse path)))
+                 (concat (s-join "/" path) "/" heading))))
     (cons ;; (concat prefix path)
-     (format "%10s: %s" prefix heading)
+     (format "%12.12s:%s %s" prefix heading-type (if helm-org-ql-show-paths path heading))
      (point-marker))))
 
 ;;;; Footer
