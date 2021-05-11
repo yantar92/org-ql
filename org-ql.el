@@ -416,8 +416,9 @@ Returns cons (INHERITED-TAGS . LOCAL-TAGS)."
         ('org-ql-nil nil)
         (_ cached-result))
     ;; Not found in cache: get tags and cache them.
-    (let* ((local-tags (or (when (looking-at org-ql-tag-line-re)
-                             (split-string (match-string-no-properties 2) ":" t))
+    (let* ((local-tags (or (org-get-tags nil 'local)
+                           ;; (when (looking-at org-ql-tag-line-re)
+                           ;;   (split-string (match-string-no-properties 2) ":" t))
                            'org-ql-nil))
            (inherited-tags (or (when org-use-tag-inheritance
                                  (save-excursion
