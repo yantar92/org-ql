@@ -205,16 +205,16 @@ Also search archives when called with prefix argument."
                       (when (or query helm-org-ql-filter)
                         (ignore-errors
                           ;; Ignore errors that might be caused by partially typed queries.
-                          (let ((inhibit-message t)
-                                (query-result
-                                 (org-ql-select helm-org-ql-buffers-files
-                                   (if helm-org-ql-filter
-                                       (if query
-                                           `(and ,helm-org-ql-filter ,query)
-                                         helm-org-ql-filter)
-                                     query)
-                                   :action `(point-marker)
-                                   :narrow helm-org-ql-narrow)))
+                          (let* ((inhibit-message t)
+                                 (query-result
+                                  (org-ql-select helm-org-ql-buffers-files
+                                    (if helm-org-ql-filter
+                                        (if query
+                                            `(and ,helm-org-ql-filter ,query)
+                                          helm-org-ql-filter)
+                                      query)
+                                    :action `(point-marker)
+                                    :narrow helm-org-ql-narrow)))
                             (append
                              (seq-intersection history query-result)
                              (seq-difference query-result history)))))))
