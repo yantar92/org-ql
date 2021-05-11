@@ -198,7 +198,7 @@ Also search archives when called with prefix argument."
       :filtered-candidate-transformer (lambda (candidate-markers _)
                                         (mapcar (lambda (candidate-marker)
                                                   (org-with-point-at candidate-marker
-                                                    (helm-org-ql--heading window-width)))
+                                                    (helm-org-ql--heading (window-width (helm-window)))))
                                                 candidate-markers))
       :candidates (lambda ()
                     (let* ((query (org-ql--query-string-to-sexp (string-clean-whitespace helm-pattern))))
