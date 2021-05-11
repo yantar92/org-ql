@@ -97,7 +97,7 @@ Based on `helm-map'.")
 
 ;;;###autoload
 (cl-defun helm-org-ql (buffers-files
-                       &key (boolean 'and) (name "helm-org-ql") (narrow nil) (filter nil))
+                       &key (boolean 'and) (name "helm-org-ql") (narrow nil) (filter nil) (history nil))
   "Display results in BUFFERS-FILES for an `org-ql' non-sexp query using Helm.
 Interactively, search the current buffer.  Note that this command
 only accepts non-sexp, \"plain\" queries.
@@ -129,7 +129,7 @@ Is transformed into this query:
   (let ((boolean (if current-prefix-arg 'or boolean))
         (helm-input-idle-delay helm-org-ql-input-idle-delay))
     (helm :prompt (format "Query (boolean %s): " (-> boolean symbol-name upcase))
-          :sources (helm-org-ql-source buffers-files :name name :narrow narrow :filter filter))))
+          :sources (helm-org-ql-source buffers-files :name name :narrow narrow :filter filter :history history))))
 
 ;;;###autoload
 (defun helm-org-ql-agenda-files (arg)
@@ -185,7 +185,7 @@ Also search archives when called with prefix argument."
     (setq-local helm-org-ql-filter filter)))
 
 ;;;###autoload
-(cl-defun helm-org-ql-source (buffers-files &key (name "helm-org-ql") (narrow nil) (filter nil))
+(cl-defun helm-org-ql-source (buffers-files &key (name "helm-org-ql") (narrow nil) (filter nil) (history nil))
   "Return Helm source named NAME that searches BUFFERS-FILES with `helm-org-ql'."
   ;; Expansion of `helm-build-sync-source' macro.
   (let ((window-width (window-width (helm-window))))
@@ -193,7 +193,8 @@ Also search archives when called with prefix argument."
       :init (lambda ()
               (helm-set-local-variable 'helm-org-ql-buffers-files buffers-files)
               (helm-set-local-variable 'helm-org-ql-narrow narrow)
-              (helm-set-local-variable 'helm-org-ql-filter filter))
+              (helm-set-local-variable 'helm-org-ql-filter filter)
+              (helm-set-local-variable 'helm-org-ql-history history))
       :filtered-candidate-transformer (lambda (candidate-markers _)
                                         (mapcar (lambda (candidate-marker)
                                                   (org-with-point-at candidate-marker
@@ -204,15 +205,19 @@ Also search archives when called with prefix argument."
                       (when (or query helm-org-ql-filter)
                         (ignore-errors
                           ;; Ignore errors that might be caused by partially typed queries.
-                          (let ((inhibit-message t))
-                            (org-ql-select helm-org-ql-buffers-files
-                              (if helm-org-ql-filter
-                                  (if query
-                                      `(and ,helm-org-ql-filter ,query)
-                                    helm-org-ql-filter)
-                                query)
-                              :action `(point-marker)
-                              :narrow helm-org-ql-narrow))))))
+                          (let ((inhibit-message t)
+                                (query-result
+                                 (org-ql-select helm-org-ql-buffers-files
+                                   (if helm-org-ql-filter
+                                       (if query
+                                           `(and ,helm-org-ql-filter ,query)
+                                         helm-org-ql-filter)
+                                     query)
+                                   :action `(point-marker)
+                                   :narrow helm-org-ql-narrow)))
+                            (append
+                             (seq-intersection history query-result)
+                             (seq-difference query-result history)))))))
       :match #'identity
       :fuzzy-match nil
       :multimatch nil
