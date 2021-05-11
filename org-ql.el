@@ -1585,14 +1585,9 @@ If TAGS is nil, return non-nil if heading has any local tags."
                                                  ":" (or ,@tags) ":")
                                            t)
                      :query t)))
-  :body (cl-macrolet ((tags-p (tags)
-                              `(and ,tags
-                                    (not (eq 'org-ql-nil ,tags)))))
-          (-let* (((_ local) (org-ql--tags-at (point))))
-            (cl-typecase tags
-              (null (tags-p local))
-              (otherwise (when (tags-p local)
-                           (seq-intersection tags local)))))))
+  :body (looking-at (rx-to-string `(seq bol (1+ "*") (1+ space) (1+ not-newline)
+                                        ":" (or ,@tags) ":")
+                                  t)))
 
 (org-ql-defpred (tags-regexp tags*) (&rest regexps)
   "Return non-nil if current heading has tags matching one or more of REGEXPS.
