@@ -105,9 +105,9 @@ Set at runtime by test suite.")
   "Return buffer visiting FILENAME.
 FILENAME should be a file in the \"tests\" directory."
   (->> (locate-dominating-file default-directory ".git")
-       (expand-file-name "tests")
-       (expand-file-name filename)
-       find-file-noselect))
+    (expand-file-name "tests")
+    (expand-file-name filename)
+    find-file-noselect))
 
 ;;;; Macros
 
@@ -435,6 +435,7 @@ RESULTS should be a list of strings as returned by
   (describe "Query results"
 
     ;; TODO: Other predicates.
+    ;; TODO: (level) predicate.
 
     (describe "(ancestors)"
       (org-ql-it "without sub-query"
@@ -636,11 +637,81 @@ RESULTS should be a list of strings as returned by
           '("Take over the universe" "Take over the world" "Visit Mars" "Visit the moon" "Renew membership in supervillain club" "Internet" "Spaceship lease" "/r/emacs"))
         (org-ql-then
           (org-ql-expect ('(deadline :to today))
-            '("/r/emacs")))))
+            '("/r/emacs"))))
+
+      (org-ql-it ":with-time"
+        (org-ql-expect ('(deadline :with-time nil))
+          '("Take over the universe" "Take over the world" "Visit Mars" "Visit the moon" "Internet" "Spaceship lease" "/r/emacs"))
+        (org-ql-expect ('(deadline :with-time t))
+          '("Renew membership in supervillain club"))
+        (org-ql-expect ('(deadline :to "2017-07-10" :with-time t))
+          '("Renew membership in supervillain club"))))
 
     (org-ql-it "(done)"
       (org-ql-expect ('(done))
         '("Learn universal sign language")))
+
+    (describe "(effort)"
+      (org-ql-it "with a number"
+        (org-ql-expect ('(effort 5))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort "5"))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort "0:05"))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort 1))
+          nil))
+      (org-ql-it "with two numbers"
+        (org-ql-expect ('(effort 5 6))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort "0:05" "0:05"))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort 4 5))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort 4 6))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort 6 7))
+          nil))
+      (org-ql-it "<"
+        (org-ql-expect ('(effort < 5))
+          nil)
+        (org-ql-expect ('(effort < 6))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort < "0:06"))
+          '("Order a pizza")))
+      (org-ql-it "<="
+        (org-ql-expect ('(effort <= 4))
+          nil)
+        (org-ql-expect ('(effort <= 5))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort <= 6))
+          '("Order a pizza"))
+        (org-ql-expect ('(effort <= "0:06"))
+          '("Order a pizza")))
+      (org-ql-it ">"
+        (org-ql-expect ('(effort > 4))
+          '("Order a pizza" "Shop for groceries"))
+        (org-ql-expect ('(effort > 5))
+          '("Shop for groceries"))
+        (org-ql-expect ('(effort > "0:05"))
+          '("Shop for groceries"))
+        (org-ql-expect ('(effort > 30))
+          nil)
+        (org-ql-expect ('(effort > "0:30"))
+          nil))
+      (org-ql-it ">="
+        (org-ql-expect ('(effort >= 4))
+          '("Order a pizza" "Shop for groceries"))
+        (org-ql-expect ('(effort >= 5))
+          '("Order a pizza"  "Shop for groceries"))
+        (org-ql-expect ('(effort >= "0:05"))
+          '("Order a pizza"  "Shop for groceries"))
+        (org-ql-expect ('(effort >= 30))
+          '("Shop for groceries"))
+        (org-ql-expect ('(effort >= 31))
+          nil)
+        (org-ql-expect ('(effort >= "0:31"))
+          nil)))
 
     (org-ql-it "(habit)"
       (org-ql-expect ('(habit))
@@ -669,7 +740,7 @@ RESULTS should be a list of strings as returned by
     (describe "(link)"
       (org-ql-it "without arguments"
         (org-ql-expect ('(link))
-          '("/r/emacs")))
+          '("Fix flux capacitor" "/r/emacs")))
       (org-ql-it "with description-or-target"
         (org-ql-expect ('(link "emacs"))
           '("/r/emacs")))
@@ -681,6 +752,18 @@ RESULTS should be a list of strings as returned by
           '("/r/emacs")))
       (org-ql-it "with :description and :target"
         (org-ql-expect ('(link :description "emacs" :target "reddit.com"))
+          '("/r/emacs")))
+      (org-ql-it "with description-or-target regexp"
+        (org-ql-expect ('(link "em.cs" :regexp-p t))
+          '("/r/emacs")))
+      (org-ql-it "with :description regexp"
+        (org-ql-expect ('(link :description "em.cs" :regexp-p t))
+          '("/r/emacs")))
+      (org-ql-it "with :target regexp"
+        (org-ql-expect ('(link :target "em.cs" :regexp-p t))
+          '("/r/emacs")))
+      (org-ql-it "with :description and :target regexp"
+        (org-ql-expect ('(link :description "em.cs" :target "em.cs" :regexp-p t))
           '("/r/emacs"))))
 
     (describe "(outline-path)"
@@ -756,7 +839,15 @@ RESULTS should be a list of strings as returned by
           '("Take over the universe" "Take over the world" "Skype with president of Antarctica" "Visit Mars" "Visit the moon" "Practice leaping tall buildings in a single bound" "Renew membership in supervillain club" "Learn universal sign language" "Order a pizza" "Get haircut" "Internet" "Spaceship lease" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp"))
         (org-ql-then
           (org-ql-expect ('(planning :to today))
-            '("Skype with president of Antarctica" "Practice leaping tall buildings in a single bound" "Learn universal sign language" "Order a pizza" "Get haircut" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp")))))
+            '("Skype with president of Antarctica" "Practice leaping tall buildings in a single bound" "Learn universal sign language" "Order a pizza" "Get haircut" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp"))))
+
+      (org-ql-it ":with-time"
+        (org-ql-expect ('(planning :with-time nil))
+          '("Take over the universe" "Take over the world" "Visit Mars" "Visit the moon" "Practice leaping tall buildings in a single bound" "Get haircut" "Internet" "Spaceship lease" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp"))
+        (org-ql-expect ('(planning :with-time t))
+          '("Skype with president of Antarctica" "Renew membership in supervillain club" "Learn universal sign language" "Order a pizza"))
+        (org-ql-expect ('(planning :to "2017-07-04" :with-time t))
+          '("Skype with president of Antarctica"))))
 
     (describe "(priority)"
 
@@ -865,7 +956,13 @@ RESULTS should be a list of strings as returned by
           '("Skype with president of Antarctica" "Practice leaping tall buildings in a single bound" "Order a pizza" "Get haircut" "Fix flux capacitor" "Shop for groceries" "Rewrite Emacs in Common Lisp"))
         (org-ql-then
           (org-ql-expect ('(scheduled :to today))
-            '("Skype with president of Antarctica" "Practice leaping tall buildings in a single bound" "Order a pizza" "Get haircut" "Fix flux capacitor" "Shop for groceries" "Rewrite Emacs in Common Lisp")))))
+            '("Skype with president of Antarctica" "Practice leaping tall buildings in a single bound" "Order a pizza" "Get haircut" "Fix flux capacitor" "Shop for groceries" "Rewrite Emacs in Common Lisp"))))
+
+      (org-ql-it ":with-time"
+        (org-ql-expect ('(scheduled :with-time t))
+          '("Skype with president of Antarctica" "Order a pizza"))
+        (org-ql-expect ('(scheduled :to "2017-07-04" :with-time t))
+          '("Skype with president of Antarctica"))))
 
     ;; ;; TODO: Test (src) predicate.  That will require modifying test data, which will be a
     ;; ;; significant hassle.  Manual testing shows that the predicate appears to work properly.
@@ -1065,7 +1162,28 @@ RESULTS should be a list of strings as returned by
         (org-ql-it ":on a number of days"
           (org-ql-then
             (org-ql-expect ('(ts-active :on 2))
-              '("Take over the world")))))
+              '("Take over the world"))))
+
+        (org-ql-it ":with-time"
+          (org-ql-expect ('(ts-active :with-time nil))
+            '("Take over the universe" "Take over the world" "Visit Mars" "Visit the moon" "Practice leaping tall buildings in a single bound" "Get haircut" "Internet" "Spaceship lease" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp"))
+          (org-ql-expect ('(ts-active :with-time t))
+            '("Skype with president of Antarctica" "Renew membership in supervillain club" "Order a pizza"))
+          (org-ql-expect ('(ts-active :to "2017-07-04" :with-time t))
+            '("Skype with president of Antarctica"))
+
+          ;; Test string query syntax.  Just doing it in this predicate
+          ;; for now, rather than in all ths ts-related ones.
+
+          ;; NOTE: "with-time=" is equivalent to "with-time=nil".  It's debatable whether this is best or most
+          ;; intuitive, but making it behave as if "with-time=" were not given is too much trouble and makes the
+          ;; code too complicated in the current implementation of argument handling and string query parsing.
+          (org-ql-expect ((org-ql--query-string-to-sexp "ts-active:with-time=nil"))
+            '("Take over the universe" "Take over the world" "Visit Mars" "Visit the moon" "Practice leaping tall buildings in a single bound" "Get haircut" "Internet" "Spaceship lease" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp"))
+          (org-ql-expect ((org-ql--query-string-to-sexp "ts-active:with-time="))
+            '("Take over the universe" "Take over the world" "Visit Mars" "Visit the moon" "Practice leaping tall buildings in a single bound" "Get haircut" "Internet" "Spaceship lease" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp"))
+          (org-ql-expect ((org-ql--query-string-to-sexp "ts-active:with-time=t"))
+            '("Skype with president of Antarctica" "Renew membership in supervillain club" "Order a pizza"))))
 
       (describe "inactive"
 
@@ -1113,7 +1231,15 @@ RESULTS should be a list of strings as returned by
         (org-ql-it ":on a number of days"
           (org-ql-then
             (org-ql-expect ('(ts-inactive :on 19))
-              '("Visit the moon" "Rewrite Emacs in Common Lisp")))))
+              '("Visit the moon" "Rewrite Emacs in Common Lisp"))))
+
+        (org-ql-it ":with-time"
+          (org-ql-expect ('(ts-inactive :with-time nil))
+            nil)
+          (org-ql-expect ('(ts-inactive :with-time t))
+            '("Visit the moon" "Learn universal sign language" "Rewrite Emacs in Common Lisp"))
+          (org-ql-expect ('(ts-inactive :to "2017-07-04" :with-time t))
+            nil)))
 
       (describe "both"
 
@@ -1175,7 +1301,15 @@ RESULTS should be a list of strings as returned by
         (org-ql-it ":on a number of days"
           (org-ql-then
             (org-ql-expect ('(ts :on 5))
-              '("Renew membership in supervillain club"))))))
+              '("Renew membership in supervillain club"))))
+
+        (org-ql-it ":with-time"
+          (org-ql-expect ('(ts :with-time nil))
+            '("Take over the universe" "Take over the world" "Visit Mars" "Visit the moon" "Practice leaping tall buildings in a single bound" "Get haircut" "Internet" "Spaceship lease" "Fix flux capacitor" "/r/emacs" "Shop for groceries" "Rewrite Emacs in Common Lisp"))
+          (org-ql-expect ('(ts :with-time t))
+            '("Skype with president of Antarctica" "Visit the moon" "Renew membership in supervillain club" "Learn universal sign language" "Order a pizza" "Rewrite Emacs in Common Lisp"))
+          (org-ql-expect ('(ts :to "2017-07-04" :with-time t))
+            '("Skype with president of Antarctica")))))
 
     (describe "Compound queries"
 
@@ -1614,10 +1748,44 @@ RESULTS should be a list of strings as returned by
                                               :store-input "M-n M-n RET")
                     :to-equal temp-filenames))
           (it "Can search buffer containing the link"
-            ;; This is sort-of a special case because of how the test link-opening function works.
-            (expect (var-after-link-save-open 'org-ql-view-buffers-files one-filename query
+            ;; The purpose of this test is to ensure that links that search whichever buffer contains the link
+            ;; search the buffer that contains the link.  This only applies to file-backed buffers.  The code is
+            ;; messy because it requires doing things like switching between buffers and emulating user input.
+            (let ((temp-file (make-temp-file "org-ql-test-" nil ".org"))
+                  (view-buffer (get-buffer-create "*Org QL View TEST BUFFER*")))
+              (unwind-protect
+                  (progn
+                    (with-temp-file temp-file
+                      ;; See function `var-after-link-save-open`.
+                      (insert "* TODO Test heading\n\n"))
+                    (find-file temp-file)
+                    (org-ql-search (current-buffer) query
+                      :buffer view-buffer)
+                    (cl-assert (member '("org-ql-search" :follow org-ql-view--link-follow :store org-ql-view--link-store)
+                                       org-link-parameters)
+                               t)
+                    (with-current-buffer view-buffer
+                      (with-simulated-input "RET"
+                        ;; Avoid writing "Stored: ..." to test output.
+                        (let ((inhibit-message t))
+                          (call-interactively #'org-store-link nil))))
+                    (cl-assert (and org-stored-links (caar org-stored-links)) t)
+                    (with-current-buffer (find-buffer-visiting temp-file)
+                      (goto-char (point-max))
+                      (with-simulated-input "RET RET"
+                        (call-interactively #'org-insert-link))
+                      (save-buffer)
+                      (backward-char 1)
+                      (with-simulated-input "RET"
+                        (org-open-at-point)))
+                    (with-current-buffer view-buffer
+                      (expect org-ql-view-buffers-files
+                              :to-equal (find-buffer-visiting temp-file))))
+                (delete-file temp-file nil))))
+          (it "Refuses to link to non-file-backed buffer"
+            (expect (var-after-link-save-open 'org-ql-view-buffers-files link-buffer query
                                               :buffer link-buffer)
-                    :to-equal link-buffer)))))
+                    :to-throw 'user-error '("Views that search non-file-backed buffers can’t be linked to"))))))
 
     ;; MAYBE: Also test `org-ql-views', although I already know it works now.
     ;; (describe "org-ql-views")

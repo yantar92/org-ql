@@ -70,6 +70,8 @@ Functions / Macros
 Changelog
 
 * 0.6-pre: 06-pre. 
+* 0.5.2: 052. 
+* 0.5.1: 051. 
 * 0.5: 05. 
 * 0.4.9: 049. 
 * 0.4.8: 048. 
@@ -382,9 +384,9 @@ Sexp syntax                                         Non-sexp syntax
 ‘(and (tags "space") (not (regexp "moon")))’        ‘tags:space !moon’
 ‘(priority >= B)’                                   ‘priority:A,B’
 
-   Note that the priority predicate does not support comparators in the
-non-sexp syntax, so multiple priorities should be passed instead, as
-seen in the last example.
+   Note that the effort, level, and priority predicates do not support
+comparators in the non-sexp syntax, so multiple arguments should be
+passed instead, as seen in the last example.
 
 
 File: README.info,  Node: General predicates,  Next: Ancestor/descendant predicates,  Prev: Non-sexp query syntax,  Up: Queries
@@ -399,6 +401,14 @@ Arguments are listed next to predicate names, where applicable.
      (a list of strings).
 ‘done’
      Return non-nil if entry’s ‘TODO’ keyword is in ‘org-done-keywords’.
+‘effort (&optional effort-or-comparator effort)’
+     Return non-nil if current heading’s effort property matches
+     arguments.  The following forms are accepted: ‘(effort DURATION)’:
+     Matches if effort is ‘DURATION’.  ‘(effort DURATION DURATION)’:
+     Matches if effort is between DURATIONs, inclusive.  ‘(effort
+     COMPARATOR DURATION)’: Matches if effort compares to ‘DURATION’
+     with ‘COMPARATOR’.  ‘COMPARATOR’ may be ‘<’, ‘<=’, ‘>’, or ‘>=’.
+     ‘DURATION’ should be an Org effort string, like 5 or 0:05.
 ‘habit’
      Return non-nil if entry is a habit.
 ‘heading (&rest strings)’
@@ -520,24 +530,27 @@ File: README.info,  Node: Date/time predicates,  Prev: Ancestor/descendant predi
 4.2.4 Date/time predicates
 --------------------------
 
-All of these predicates take optional keyword arguments ‘:from’, ‘:to:’,
-and ‘:on’:
+These predicates take optional keyword arguments:
 
-   • If ‘:from’, return non-nil if entry has a timestamp on or after
+   • ‘:from’: Match entries whose timestamp is on or after timestamp
      ‘:from’.
-   • If ‘:to’, return non-nil if entry has a timestamp on or before
+   • ‘:to’: Match entries whose timestamp is on or before timestamp
      ‘:to’.
-   • If ‘:on’, return non-nil if entry has a timestamp on date ‘:on’.
+   • ‘:on’: Match entries whose timestamp is on date ‘:on’.
+   • ‘:with-time’: If unspecified, match timestamps with or without
+     times (i.e.  HH:MM). If nil, match timestamps without times.  If t,
+     match timestamps with times.
 
-   Argument values should be either a number of days (positive to look
-forward, or negative to look backward), a ‘ts’ struct, or a string
-parseable by ‘parse-time-string’ (the string may omit the time value).
+   Timestamp/date arguments should be either a number of days (positive
+to look forward, or negative to look backward), a string parseable by
+‘parse-time-string’ (the string may omit the time value), or a ‘ts’
+struct.
 
    • *Predicates*
      ‘ts’
           Return non-nil if current entry has a timestamp in given
-          period.  If no arguments are specified, return non-nil if
-          entry has any timestamp.
+          period.  Without arguments, return non-nil if entry has a
+          timestamp.
      ‘ts-active, ts-a’
           Like ts, but only matches active timestamps.
      ‘ts-inactive, ts-i’
@@ -550,30 +563,28 @@ number of days.  The number can be negative to invert the direction.
    • *Backward-looking*
      ‘clocked’
           Return non-nil if current entry was clocked in given period.
-          If no arguments are specified, return non-nil if entry was
-          clocked at any time.  Note: Clock entries are expected to be
-          clocked out.  Currently clocked entries (i.e.  with unclosed
-          timestamp ranges) are ignored.
+          Without arguments, return non-nil if entry was ever clocked.
+          Note: Clock entries are expected to be clocked out.  Currently
+          clocked entries (i.e.  with unclosed timestamp ranges) are
+          ignored.
      ‘closed’
           Return non-nil if current entry was closed in given period.
-          If no arguments are specified, return non-nil if entry was
-          closed at any time.
+          Without arguments, return non-nil if entry is closed.
 
    • *Forward-looking*
      ‘deadline’
           Return non-nil if current entry has deadline in given period.
           If argument is auto, return non-nil if entry has deadline
-          within org-deadline-warning-days.  If no arguments are
-          specified, return non-nil if entry has any deadline.
+          within org-deadline-warning-days.  Without arguments, return
+          non-nil if entry has any deadline.
      ‘planning’
-          Return non-nil if current entry has planning timestamp in
-          given period (i.e.  its deadline, scheduled, or closed
-          timestamp).  If no arguments are specified, return non-nil if
-          entry is scheduled at any time.
+          Return non-nil if current entry has planning timestamp (i.e.
+          its deadline, scheduled, or closed timestamp) in given period.
+          Without arguments, return non-nil if entry has any planning
+          timestamp.
      ‘scheduled’
           Return non-nil if current entry is scheduled in given period.
-          If no arguments are specified, return non-nil if entry is
-          scheduled at any time.
+          Without arguments, return non-nil if entry is scheduled.
 
 
 File: README.info,  Node: Functions / Macros,  Next: Dynamic block,  Prev: Queries,  Up: Usage
@@ -937,6 +948,8 @@ releases.
 * Menu:
 
 * 0.6-pre: 06-pre. 
+* 0.5.2: 052. 
+* 0.5.1: 051. 
 * 0.5: 05. 
 * 0.4.9: 049. 
 * 0.4.8: 048. 
@@ -958,7 +971,7 @@ releases.
 * 0.1: 01. 
 
 
-File: README.info,  Node: 06-pre,  Next: 05,  Up: Changelog
+File: README.info,  Node: 06-pre,  Next: 052,  Up: Changelog
 
 5.1 0.6-pre
 ===========
@@ -966,14 +979,28 @@ File: README.info,  Node: 06-pre,  Next: 05,  Up: Changelog
 *Added*
    • Macro org-ql-defpred, used to define search predicates.  (See
      tutorial (examples/defpred.org).)
+   • Predicate ‘effort’.
    • Predicate ‘heading-regexp’, which matches regular expressions
      against heading text (alias: ‘h*’).
+   • Timestamp-related predicates now accept an optional ‘:with-time’
+     argument, which allows matching timestamps with or without times
+     (i.e.  HH:MM).
 
    *Changed*
    • Helm support (including the command helm-org-ql) has been moved to
      a separate package, helm-org-ql.
    • Predicate ‘heading’ now matches plain strings instead of regular
      expressions.
+   • Update dash dependency, and remove dependency on obsolete
+     dash-functional.  (Fixes #179
+     (https://github.com/alphapapa/org-ql/issues/179), #209
+     (https://github.com/alphapapa/org-ql/issues/209).  Thanks to Mark
+     Hudnall (https://github.com/landakram), Akira Komamura
+     (https://github.com/akirak), Nathanael kinfe
+     (https://github.com/natask), Pablo Stafforini
+     (https://github.com/benthamite), Jason May
+     (https://github.com/jmay), and Basil L. Contovounesios
+     (https://github.com/basil-conto).)
 
    *Internal*
    • Predicates are now defined more cleanly with a macro
@@ -983,9 +1010,33 @@ File: README.info,  Node: 06-pre,  Next: 05,  Up: Changelog
    • Version 1.0 of library ‘peg’ is now required.
 
 
-File: README.info,  Node: 05,  Next: 049,  Prev: 06-pre,  Up: Changelog
+File: README.info,  Node: 052,  Next: 051,  Prev: 06-pre,  Up: Changelog
 
-5.2 0.5
+5.2 0.5.2
+=========
+
+*Fixed*
+   • Predicate ‘link’’s ‘:target’ and ‘:regexp-p’ arguments.  (#220
+     (https://github.com/alphapapa/org-ql/pull/220).  Thanks to Akira
+     Komamura (https://github.com/akirak).)
+
+
+File: README.info,  Node: 051,  Next: 05,  Prev: 052,  Up: Changelog
+
+5.3 0.5.1
+=========
+
+*Fixed*
+   • Custom sorting functions could corrupt the cache, causing items to
+     disappear after refreshing an org-ql-search buffer.  (#186
+     (https://github.com/alphapapa/org-ql/issues/186), #187
+     (https://github.com/alphapapa/org-ql/issues/187).  Thanks to
+     Nathanael kinfe (https://github.com/natask).)
+
+
+File: README.info,  Node: 05,  Next: 049,  Prev: 051,  Up: Changelog
+
+5.4 0.5
 =======
 
 *Added*
@@ -1026,7 +1077,7 @@ File: README.info,  Node: 05,  Next: 049,  Prev: 06-pre,  Up: Changelog
 
 File: README.info,  Node: 049,  Next: 048,  Prev: 05,  Up: Changelog
 
-5.3 0.4.9
+5.5 0.4.9
 =========
 
 *Fixed*
@@ -1037,7 +1088,7 @@ File: README.info,  Node: 049,  Next: 048,  Prev: 05,  Up: Changelog
 
 File: README.info,  Node: 048,  Next: 047,  Prev: 049,  Up: Changelog
 
-5.4 0.4.8
+5.6 0.4.8
 =========
 
 *Fixed*
@@ -1049,7 +1100,7 @@ File: README.info,  Node: 048,  Next: 047,  Prev: 049,  Up: Changelog
 
 File: README.info,  Node: 047,  Next: 046,  Prev: 048,  Up: Changelog
 
-5.5 0.4.7
+5.7 0.4.7
 =========
 
 *Fixed*
@@ -1062,7 +1113,7 @@ File: README.info,  Node: 047,  Next: 046,  Prev: 048,  Up: Changelog
 
 File: README.info,  Node: 046,  Next: 045,  Prev: 047,  Up: Changelog
 
-5.6 0.4.6
+5.8 0.4.6
 =========
 
 *Fixed*
@@ -1075,7 +1126,7 @@ File: README.info,  Node: 046,  Next: 045,  Prev: 047,  Up: Changelog
 
 File: README.info,  Node: 045,  Next: 044,  Prev: 046,  Up: Changelog
 
-5.7 0.4.5
+5.9 0.4.5
 =========
 
 *Fixed*
@@ -1087,8 +1138,8 @@ File: README.info,  Node: 045,  Next: 044,  Prev: 046,  Up: Changelog
 
 File: README.info,  Node: 044,  Next: 043,  Prev: 045,  Up: Changelog
 
-5.8 0.4.4
-=========
+5.10 0.4.4
+==========
 
 *Fixed*
    • Compatibility with Org Agenda remote editing commands (some of
@@ -1099,8 +1150,8 @@ File: README.info,  Node: 044,  Next: 043,  Prev: 045,  Up: Changelog
 
 File: README.info,  Node: 043,  Next: 042,  Prev: 044,  Up: Changelog
 
-5.9 0.4.3
-=========
+5.11 0.4.3
+==========
 
 *Fixed*
    • When org-ql-view-refresh is called, ensure the buffer is an Org QL
@@ -1109,7 +1160,7 @@ File: README.info,  Node: 043,  Next: 042,  Prev: 044,  Up: Changelog
 
 File: README.info,  Node: 042,  Next: 041,  Prev: 043,  Up: Changelog
 
-5.10 0.4.2
+5.12 0.4.2
 ==========
 
 *Fixed*
@@ -1118,7 +1169,7 @@ File: README.info,  Node: 042,  Next: 041,  Prev: 043,  Up: Changelog
 
 File: README.info,  Node: 041,  Next: 04,  Prev: 042,  Up: Changelog
 
-5.11 0.4.1
+5.13 0.4.1
 ==========
 
 *Fixed*
@@ -1128,7 +1179,7 @@ File: README.info,  Node: 041,  Next: 04,  Prev: 042,  Up: Changelog
 
 File: README.info,  Node: 04,  Next: 032,  Prev: 041,  Up: Changelog
 
-5.12 0.4
+5.14 0.4
 ========
 
 _Note:_ The next release, 0.5, may include changes which will require
@@ -1209,7 +1260,7 @@ as they will be pushed to the master branch when ready.
 
 File: README.info,  Node: 032,  Next: 031,  Prev: 04,  Up: Changelog
 
-5.13 0.3.2
+5.15 0.3.2
 ==========
 
 *Fixed*
@@ -1222,7 +1273,7 @@ File: README.info,  Node: 032,  Next: 031,  Prev: 04,  Up: Changelog
 
 File: README.info,  Node: 031,  Next: 03,  Prev: 032,  Up: Changelog
 
-5.14 0.3.1
+5.16 0.3.1
 ==========
 
 *Fixed*
@@ -1232,7 +1283,7 @@ File: README.info,  Node: 031,  Next: 03,  Prev: 032,  Up: Changelog
 
 File: README.info,  Node: 03,  Next: 023,  Prev: 031,  Up: Changelog
 
-5.15 0.3
+5.17 0.3
 ========
 
 *Added*
@@ -1297,7 +1348,7 @@ File: README.info,  Node: 03,  Next: 023,  Prev: 031,  Up: Changelog
 
 File: README.info,  Node: 023,  Next: 022,  Prev: 03,  Up: Changelog
 
-5.16 0.2.3
+5.18 0.2.3
 ==========
 
 *Fixed*
@@ -1307,7 +1358,7 @@ File: README.info,  Node: 023,  Next: 022,  Prev: 03,  Up: Changelog
 
 File: README.info,  Node: 022,  Next: 021,  Prev: 023,  Up: Changelog
 
-5.17 0.2.2
+5.19 0.2.2
 ==========
 
 *Fixed*
@@ -1318,7 +1369,7 @@ File: README.info,  Node: 022,  Next: 021,  Prev: 023,  Up: Changelog
 
 File: README.info,  Node: 021,  Next: 02,  Prev: 022,  Up: Changelog
 
-5.18 0.2.1
+5.20 0.2.1
 ==========
 
 *Fixed*
@@ -1328,7 +1379,7 @@ File: README.info,  Node: 021,  Next: 02,  Prev: 022,  Up: Changelog
 
 File: README.info,  Node: 02,  Next: 01,  Prev: 021,  Up: Changelog
 
-5.19 0.2
+5.21 0.2
 ========
 
 *Added*
@@ -1411,7 +1462,7 @@ File: README.info,  Node: 02,  Next: 01,  Prev: 021,  Up: Changelog
 
 File: README.info,  Node: 01,  Prev: 02,  Up: Changelog
 
-5.20 0.1
+5.22 0.1
 ========
 
 First tagged release.
@@ -1469,56 +1520,58 @@ GPLv3
 
 Tag Table:
 Node: Top225
-Node: Contents1667
-Node: Screenshots1790
-Node: Installation1908
-Node: Quelpa2404
-Node: Helm support2932
-Node: Usage3323
-Node: Commands3721
-Node: org-ql-search4194
-Node: helm-org-ql5844
-Node: org-ql-view6204
-Node: org-ql-view-sidebar6704
-Node: org-ql-view-recent-items7060
-Node: org-ql-sparse-tree7544
-Node: Queries8344
-Node: Non-sexp query syntax9455
-Node: General predicates11162
-Node: Ancestor/descendant predicates16805
-Node: Date/time predicates17933
-Node: Functions / Macros20588
-Node: Agenda-like views20886
-Node: Listing / acting-on results22291
-Node: Custom predicates27913
-Node: Dynamic block31404
-Node: Links34102
-Node: Tips34789
-Node: Changelog35107
-Node: 06-pre35803
-Node: 0536638
-Node: 04938115
-Node: 04838389
-Node: 04738736
-Node: 04639131
-Node: 04539531
-Node: 04439890
-Node: 04340247
-Node: 04240442
-Node: 04140603
-Node: 0440844
-Node: 03244777
-Node: 03145156
-Node: 0345353
-Node: 02348328
-Node: 02248556
-Node: 02148824
-Node: 0249023
-Node: 0153058
-Node: Notes53159
-Node: Comparison with Org Agenda searches53321
-Node: org-sidebar54193
-Node: License54472
+Node: Contents1697
+Node: Screenshots1820
+Node: Installation1938
+Node: Quelpa2434
+Node: Helm support2962
+Node: Usage3353
+Node: Commands3751
+Node: org-ql-search4224
+Node: helm-org-ql5874
+Node: org-ql-view6234
+Node: org-ql-view-sidebar6734
+Node: org-ql-view-recent-items7090
+Node: org-ql-sparse-tree7574
+Node: Queries8374
+Node: Non-sexp query syntax9485
+Node: General predicates11209
+Node: Ancestor/descendant predicates17430
+Node: Date/time predicates18558
+Node: Functions / Macros21220
+Node: Agenda-like views21518
+Node: Listing / acting-on results22923
+Node: Custom predicates28545
+Node: Dynamic block32036
+Node: Links34734
+Node: Tips35421
+Node: Changelog35739
+Node: 06-pre36465
+Node: 05238038
+Node: 05138342
+Node: 0538759
+Node: 04940233
+Node: 04840507
+Node: 04740854
+Node: 04641249
+Node: 04541649
+Node: 04442008
+Node: 04342367
+Node: 04242564
+Node: 04142725
+Node: 0442966
+Node: 03246899
+Node: 03147278
+Node: 0347475
+Node: 02350450
+Node: 02250678
+Node: 02150946
+Node: 0251145
+Node: 0155180
+Node: Notes55281
+Node: Comparison with Org Agenda searches55443
+Node: org-sidebar56315
+Node: License56594
 
 End Tag Table
 

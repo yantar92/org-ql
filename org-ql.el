@@ -3,7 +3,7 @@
 ;; Author: Adam Porter <adam@alphapapa.net>
 ;; Url: https://github.com/alphapapa/org-ql
 ;; Version: 0.6-pre
-;; Package-Requires: ((emacs "26.1") (dash "2.13") (dash-functional "1.2.0") (f "0.17.2") (map "2.1") (org "9.0") (org-super-agenda "1.2") (ov "1.0.6") (peg "1.0") (s "1.12.0") (transient "0.1") (ts "0.2-pre"))
+;; Package-Requires: ((emacs "26.1") (dash "2.18.1") (f "0.17.2") (map "2.1") (org "9.0") (org-super-agenda "1.2") (ov "1.0.6") (peg "1.0") (s "1.12.0") (transient "0.1") (ts "0.2-pre"))
 ;; Keywords: hypermedia, outlines, Org, agenda
 
 ;;; Commentary:
@@ -41,7 +41,6 @@
 (require 'subr-x)
 
 (require 'dash)
-(require 'dash-functional)
 (require 'map)
 (require 'ts)
 
@@ -131,6 +130,147 @@ the value returned by it at that node.")
     "Plist of predicates, their corresponding functions, and their docstrings.
 This list should not contain any duplicates."))
 
+;;;;; Timestamp regexps
+
+;; We need more specificity than the built-in Org timestamp regexps
+;; provide, and sometimes they change from version to version, so we
+;; define our own.  And by defining them with `rx', they are much
+;; easier to understand than the string-based ones in org.el (of
+;; course, `rx' probably wasn't available when most of those were
+;; written).
+
+;; MAYBE: Use newer `rx' custom expressions to define these.
+;; MAYBE: Add match groups corresponding to the ones in the "official" Org regexps.
+;; TODO: Use these new regexps in more places.
+
+(defvar org-ql-regexp-part-ts-date
+  (rx (repeat 4 digit) "-" (repeat 2 digit) "-" (repeat 2 digit)
+      ;; Day of week
+      (optional " " (1+ alpha)))
+  "Matches the inner, date part of an Org timestamp, both active and inactive.
+Also matches optional day-of-week.  Used to build other timestamp
+regexps.")
+
+(defvar org-ql-regexp-part-ts-repeaters
+  ;; Repeaters (not sure if the colon is necessary, but it's in the org.el one)
+  (rx (repeat 1 2 (seq " " (repeat 1 2 (any "-+:")) (1+ digit) (any "hdwmy"))))
+  "Matches the repeater part of an Org timestamp.
+Includes leading space character.")
+
+(defvar org-ql-regexp-part-ts-time
+  (rx " " (repeat 1 2 digit) ":" (repeat 2 digit))
+  "Matches the inner, time part of an Org timestamp (i.e. HH:MM).
+Includes leading space character.  Used to build other timestamp
+regexps.")
+
+;; NOTE: The inactive timestamp regexps don't allow repeaters.  I don't know if this is
+;; officially correct, but it seems to make sense, and would be easy to change if necessary.
+
+(defvar org-ql-regexp-ts-both
+  (rx-to-string
+   `(or (seq "<" (regexp ,org-ql-regexp-part-ts-date)
+             (optional (regexp ,org-ql-regexp-part-ts-time))
+             (optional (regexp ,org-ql-regexp-part-ts-repeaters)) ">")
+        (seq "[" (regexp ,org-ql-regexp-part-ts-date)
+             (optional (regexp ,org-ql-regexp-part-ts-time)))))
+  "Matches both active and inactive Org timestamps, with or without time.")
+
+(defvar org-ql-regexp-ts-both-with-time
+  (rx-to-string `(or (seq "<" (regexp ,org-ql-regexp-part-ts-date)
+                          (regexp ,org-ql-regexp-part-ts-time)
+                          (optional (regexp ,org-ql-regexp-part-ts-repeaters)) ">")
+                     (seq "[" (regexp ,org-ql-regexp-part-ts-date)
+                          (regexp ,org-ql-regexp-part-ts-time) "]")))
+  "Matches both active and inactive Org timestamps, with time.")
+
+(defvar org-ql-regexp-ts-both-without-time
+  (rx-to-string `(or (seq "<" (regexp ,org-ql-regexp-part-ts-date)
+                          (optional (regexp ,org-ql-regexp-part-ts-repeaters)) ">")
+                     (seq "[" (regexp ,org-ql-regexp-part-ts-date) "]")))
+  "Matches both active and inactive Org timestamps, without time.")
+
+(defvar org-ql-regexp-ts-active
+  (rx-to-string `(seq "<" (regexp ,org-ql-regexp-part-ts-date)
+                      (optional (regexp ,org-ql-regexp-part-ts-time))
+                      (optional (regexp ,org-ql-regexp-part-ts-repeaters)) ">"))
+  "Matches active Org timestamps, with or without time.")
+
+(defvar org-ql-regexp-ts-active-with-time
+  (rx-to-string `(seq "<" (regexp ,org-ql-regexp-part-ts-date)
+                      (regexp ,org-ql-regexp-part-ts-time)
+                      (optional (regexp ,org-ql-regexp-part-ts-repeaters)) ">"))
+  "Matches active Org timestamps, with time.")
+
+(defvar org-ql-regexp-ts-active-without-time
+  (rx-to-string `(seq "<" (regexp ,org-ql-regexp-part-ts-date)
+                      (optional (regexp ,org-ql-regexp-part-ts-repeaters)) ">"))
+  "Matches active Org timestamps, without time.")
+
+(defvar org-ql-regexp-ts-inactive
+  (rx-to-string `(seq "[" (regexp ,org-ql-regexp-part-ts-date)
+                      (optional (regexp ,org-ql-regexp-part-ts-time))"]"))
+  "Matches inactive Org timestamps, with or without time.")
+
+(defvar org-ql-regexp-ts-inactive-with-time
+  (rx-to-string `(seq "[" (regexp ,org-ql-regexp-part-ts-date)
+                      (regexp ,org-ql-regexp-part-ts-time)"]"))
+  "Matches inactive Org timestamps, with time.")
+
+(defvar org-ql-regexp-ts-inactive-without-time
+  (rx-to-string `(seq "[" (regexp ,org-ql-regexp-part-ts-date) "]"))
+  "Matches inactive Org timestamps, without time.")
+
+(defvar org-ql-regexp-planning
+  (rx-to-string `(seq bow (or (seq "CLOSED" ":" (0+ " ")
+                                   (group-n 1 (regexp ,org-ql-regexp-ts-inactive)))
+                              (seq (or "DEADLINE" "SCHEDULED") ":" (0+ " ")
+                                   (group-n 1 (regexp ,org-ql-regexp-ts-active))))))
+  "Matches CLOSED, DEADLINE or SCHEDULED keyword with timestamp, with or without time.")
+
+(defvar org-ql-regexp-planning-with-time
+  (rx-to-string `(seq bow (or (seq "CLOSED" ":" (0+ " ")
+                                   (group-n 1 (regexp ,org-ql-regexp-ts-inactive-with-time)))
+                              (seq (or "DEADLINE" "SCHEDULED") ":" (0+ " ")
+                                   (group-n 1 (regexp ,org-ql-regexp-ts-active-with-time))))))
+  "Matches CLOSED, DEADLINE or SCHEDULED keyword with timestamp, with time.")
+
+(defvar org-ql-regexp-planning-without-time
+  (rx-to-string `(seq bow (or (seq "CLOSED" ":" (0+ " ")
+                                   (group-n 1 (regexp ,org-ql-regexp-ts-inactive-without-time)))
+                              (seq (or "DEADLINE" "SCHEDULED") ":" (0+ " ")
+                                   (group-n 1 (regexp ,org-ql-regexp-ts-active-without-time))))))
+  "Matches CLOSED, DEADLINE or SCHEDULED keyword with timestamp, without time.")
+
+(defvar org-ql-regexp-deadline
+  (rx-to-string `(seq bow "DEADLINE" ":" (0+ " ")
+                      (group (regexp ,org-ql-regexp-ts-active))))
+  "Matches DEADLINE keyword with a time-and-hour stamp, with or without time.")
+
+(defvar org-ql-regexp-deadline-with-time
+  (rx-to-string `(seq bow "DEADLINE" ":" (0+ " ")
+                      (group (regexp ,org-ql-regexp-ts-active-with-time))))
+  "Matches DEADLINE keyword with a time-and-hour stamp, with time.")
+
+(defvar org-ql-regexp-deadline-without-time
+  (rx-to-string `(seq bow "DEADLINE" ":" (0+ " ")
+                      (group (regexp ,org-ql-regexp-ts-active-without-time))))
+  "Matches DEADLINE keyword with a time-and-hour stamp, without time.")
+
+(defvar org-ql-regexp-scheduled
+  (rx-to-string `(seq bow "SCHEDULED" ":" (0+ " ")
+                      (group (regexp ,org-ql-regexp-ts-active))))
+  "Matches SCHEDULED keyword with a time-and-hour stamp, with or without time.")
+
+(defvar org-ql-regexp-scheduled-with-time
+  (rx-to-string `(seq bow "SCHEDULED" ":" (0+ " ")
+                      (group (regexp ,org-ql-regexp-ts-active-with-time))))
+  "Matches SCHEDULED keyword with a time-and-hour stamp, with time.")
+
+(defvar org-ql-regexp-scheduled-without-time
+  (rx-to-string `(seq bow "SCHEDULED" ":" (0+ " ")
+                      (group (regexp ,org-ql-regexp-ts-active-without-time))))
+  "Matches SCHEDULED keyword with a time-and-hour stamp, without time.")
+
 ;;;; Customization
 
 (defgroup org-ql nil
@@ -217,18 +357,18 @@ returns nil or non-nil."
                           (function (funcall buffers-or-files))
                           (list buffers-or-files)
                           (otherwise (list buffers-or-files)))
-                        (--map (cl-etypecase it
-                                 ;; NOTE: This etypecase is essential to opening links safely,
-                                 ;; as it rejects, e.g. lambdas in the buffers-files argument.
-                                 (buffer it)
-                                 (string (or (find-buffer-visiting it)
-                                             (when (file-readable-p it)
-                                               ;; It feels unintuitive that `find-file-noselect' returns
-                                               ;; a buffer if the filename doesn't exist.
-                                               (find-file-noselect it))
-                                             (user-error "Can't open file: %s" it)))))
-                        ;; Ignore special/hidden buffers.
-                        (--remove (string-prefix-p " " (buffer-name it)))))
+                     (--map (cl-etypecase it
+                              ;; NOTE: This etypecase is essential to opening links safely,
+                              ;; as it rejects, e.g. lambdas in the buffers-files argument.
+                              (buffer it)
+                              (string (or (find-buffer-visiting it)
+                                          (when (file-readable-p it)
+                                            ;; It feels unintuitive that `find-file-noselect' returns
+                                            ;; a buffer if the filename doesn't exist.
+                                            (find-file-noselect it))
+                                          (user-error "Can't open file: %s" it)))))
+                     ;; Ignore special/hidden buffers.
+                     (--remove (string-prefix-p " " (buffer-name it)))))
           (query (org-ql--normalize-query query))
           ((&plist :query :preamble :preamble-case-fold) (org-ql--query-preamble query))
           (predicate (org-ql--query-predicate query))
@@ -264,12 +404,12 @@ returns nil or non-nil."
                              (fset name fn)))
                          ;; Run query on buffers.
                          (->> buffers
-                              (--map (with-current-buffer it
-                                       (unless (derived-mode-p 'org-mode)
-                                         (user-error "Not an Org buffer: %s" (buffer-name)))
-                                       (org-ql--select-cached :query query :preamble preamble :preamble-case-fold preamble-case-fold
-                                                              :predicate predicate :action action :narrow narrow)))
-                              (-flatten-n 1)))
+                           (--map (with-current-buffer it
+                                    (unless (derived-mode-p 'org-mode)
+                                      (user-error "Not an Org buffer: %s" (buffer-name)))
+                                    (org-ql--select-cached :query query :preamble preamble :preamble-case-fold preamble-case-fold
+                                                           :predicate predicate :action action :narrow narrow)))
+                           (-flatten-n 1)))
                      (--each orig-fns
                        ;; Restore original function mappings.
                        (-let (((&plist :name :fn) it))
@@ -282,7 +422,7 @@ returns nil or non-nil."
        ;; Default sorting functions
        (org-ql--sort-by items (-list sort)))
       ;; Sort by user-given comparator.
-      ((pred functionp) (sort items sort))
+      ((pred functionp) (-sort sort items))
       (_ (user-error "SORT must be either nil, one or a list of the defined sorting methods (see documentation), or a comparison function of two arguments")))))
 
 ;;;###autoload
@@ -526,8 +666,8 @@ from within ELEMENT's buffer."
   ;; time?  I don't know, but for now, it seems that we have to use `copy-marker'.
   (let* ((marker (copy-marker (org-element-property :begin element)))
          (properties (--> (cadr element)
-                          (plist-put it :org-marker marker)
-                          (plist-put it :org-hd-marker marker))))
+                       (plist-put it :org-marker marker)
+                       (plist-put it :org-hd-marker marker))))
     (setf (cadr element) properties)
     element))
 
@@ -543,6 +683,12 @@ returns nil."
       (unless (yes-or-no-p (concat "Query is in sexp form and could contain arbitrary code: "
                                    query-string " Execute it? "))
         (user-error "Query aborted by user")))))
+
+(defun org-ql--plist-get* (plist property)
+  "Return the value of PROPERTY in PLIST, or `not-found' if the property is missing."
+  (if-let ((pair (plist-member plist property)))
+      (cadr pair)
+    'not-found))
 
 ;;;;; Query processing
 
@@ -645,28 +791,57 @@ Arguments STRING, POS, FILL, and LEVEL are according to
   (let ((byte-compile-log-warning-function #'org-ql--byte-compile-warning))
     (byte-compile
      `(lambda ()
+        ;; NOTE: `clocked' and `closed' don't have WITH-TIME args, because they should always have a time.
+        ;; TODO: If possible, all of this argument processing should be done in each predicate's normalizers.
+        ;; NOTE: The pcases check for both t/nil symbols and strings, because the
+        ;; string queries always return keyword arguments' values as strings.
         (cl-macrolet ((clocked (&key from to on)
                                (org-ql--from-to-on)
                                `(org-ql--predicate-clocked :from ,from :to ,to))
-                      (closed (&key from to on)
+                      (closed (&key from to on (with-time 'not-found))
                               (org-ql--from-to-on)
                               `(org-ql--predicate-closed :from ,from :to ,to))
-                      (deadline (&key from to on)
+                      (deadline (&key from to on (with-time 'not-found))
                                 (org-ql--from-to-on)
-                                `(org-ql--predicate-deadline :from ,from :to ,to))
-                      (planning (&key from to on)
+                                `(org-ql--predicate-deadline
+                                  :from ,from :to ,to :with-time ',with-time
+                                  :regexp ,(pcase-exhaustive with-time
+                                             ((or 't "t") org-ql-regexp-deadline-with-time)
+                                             ((or 'nil "nil") org-ql-regexp-deadline-without-time)
+                                             ('not-found org-ql-regexp-deadline))))
+                      (planning (&key from to on (with-time 'not-found))
                                 (org-ql--from-to-on)
-                                `(org-ql--predicate-planning :from ,from :to ,to))
-                      (scheduled (&key from to on)
+                                `(org-ql--predicate-planning
+                                  :from ,from :to ,to :with-time ',with-time
+                                  :regexp ,(pcase-exhaustive with-time
+                                             ((or 't "t") org-ql-regexp-planning-with-time)
+                                             ((or 'nil "nil") org-ql-regexp-planning-without-time)
+                                             ('not-found org-ql-regexp-planning))))
+                      (scheduled (&key from to on (with-time 'not-found))
                                  (org-ql--from-to-on)
-                                 `(org-ql--predicate-scheduled :from ,from :to ,to))
-                      (ts (&key from to on (type 'both))
+                                 `(org-ql--predicate-scheduled
+                                   :from ,from :to ,to :with-time ',with-time
+                                   :regexp ,(pcase-exhaustive with-time
+                                              ((or 't "t") org-ql-regexp-scheduled-with-time)
+                                              ((or 'nil "nil") org-ql-regexp-scheduled-without-time)
+                                              ('not-found org-ql-regexp-scheduled))))
+                      (ts (&key from to on (type 'both) (with-time 'not-found))
                           (org-ql--from-to-on)
-                          `(org-ql--predicate-ts :from ,from :to ,to
-                                                 :regexp ,(pcase type
-                                                            ('both org-tsr-regexp-both)
-                                                            ('active org-tsr-regexp)
-                                                            ('inactive org-ql-tsr-regexp-inactive)))))
+                          `(org-ql--predicate-ts
+                            :from ,from :to ,to :with-time ',with-time
+                            :regexp ,(pcase type
+                                       ((or 'nil 'both) (pcase-exhaustive with-time
+                                                          ((or 't "t") org-ql-regexp-ts-both-with-time)
+                                                          ((or 'nil "nil") org-ql-regexp-ts-both-without-time)
+                                                          ('not-found org-ql-regexp-ts-both)))
+                                       ('active (pcase-exhaustive with-time
+                                                  ((or 't "t") org-ql-regexp-ts-active-with-time)
+                                                  ((or 'nil "nil") org-ql-regexp-ts-active-without-time)
+                                                  ('not-found org-ql-regexp-ts-active)))
+                                       ('inactive (pcase-exhaustive with-time
+                                                    ((or 't "t") org-ql-regexp-ts-inactive-with-time)
+                                                    ((or 'nil "nil") org-ql-regexp-ts-inactive-without-time)
+                                                    ('not-found org-ql-regexp-ts-inactive)))))))
           ,query)))))
 
 ;;;;; String query parsing
@@ -686,16 +861,16 @@ value of `org-ql-predicates')."
   (let* ((names (--map (symbol-name (plist-get (cdr it) :name))
                        predicates))
          (aliases (->> predicates
-                       (--map (plist-get (cdr it) :aliases))
-                       -non-nil
-                       -flatten
-                       (-map #'symbol-name)))
+                    (--map (plist-get (cdr it) :aliases))
+                    -non-nil
+                    -flatten
+                    (-map #'symbol-name)))
          (predicate-names (->> (append names aliases)
-                               -uniq
-                               ;; Sort the keywords longest-first to work around what seems to be an
-                               ;; obscure bug in `peg': when one keyword is a substring of another,
-                               ;; and the shorter one is listed first, the shorter one fails to match.
-                               (-sort (-on #'> #'length))))
+                            -uniq
+                            ;; Sort the keywords longest-first to work around what seems to be an
+                            ;; obscure bug in `peg': when one keyword is a substring of another,
+                            ;; and the shorter one is listed first, the shorter one fails to match.
+                            (-sort (-on #'> #'length))))
          (pexs `((query (+ term
                            (opt (+ (syntax-class whitespace) (any)))))
                  (term (or (and negation (list positive-term)
@@ -768,8 +943,8 @@ manually; see the definition of `org-ql-defpred').")
   "Define function `org-ql--normalize-query' for PREDICATES.
 PREDICATES should be the value of `org-ql-predicates'."
   (let ((normalizer-patterns (->> predicates
-                                  (--map (plist-get (cdr it) :normalizers))
-                                  (-flatten-n 1))))
+                               (--map (plist-get (cdr it) :normalizers))
+                               (-flatten-n 1))))
     (fset 'org-ql--normalize-query
           (byte-compile
            `(lambda (query)
@@ -998,33 +1173,33 @@ predicates."
      (when from
        (setq from (pcase from
                     ((or 'today "today") (->> (ts-now)
-                                              (ts-apply :hour 0 :minute 0 :second 0)))
+                                           (ts-apply :hour 0 :minute 0 :second 0)))
                     ((pred numberp) (->> (ts-now)
-                                         (ts-adjust 'day from)
-                                         (ts-apply :hour 0 :minute 0 :second 0)))
+                                      (ts-adjust 'day from)
+                                      (ts-apply :hour 0 :minute 0 :second 0)))
                     ((and (pred stringp)
                           (guard (ignore-errors (cl-parse-integer from))))
                      ;; The `pcase' `let' pattern doesn't bind values in the
                      ;; body forms, so we have to parse the integer again.
                      (->> (ts-now)
-                          (ts-adjust 'day (cl-parse-integer from))
-                          (ts-apply :hour 0 :minute 0 :second 0)))
+                       (ts-adjust 'day (cl-parse-integer from))
+                       (ts-apply :hour 0 :minute 0 :second 0)))
                     ((pred stringp) (ts-parse-fill 'begin from))
                     ((pred ts-p) from))))
      (when to
        (setq to (pcase to
                   ((or 'today "today") (->> (ts-now)
-                                            (ts-apply :hour 23 :minute 59 :second 59)))
+                                         (ts-apply :hour 23 :minute 59 :second 59)))
                   ((pred numberp) (->> (ts-now)
-                                       (ts-adjust 'day to)
-                                       (ts-apply :hour 23 :minute 59 :second 59)))
+                                    (ts-adjust 'day to)
+                                    (ts-apply :hour 23 :minute 59 :second 59)))
                   ((and (pred stringp)
                         (guard (ignore-errors (cl-parse-integer to))))
                    ;; The `pcase' `let' pattern doesn't bind values in the
                    ;; body forms, so we have to parse the integer again.
                    (->> (ts-now)
-                        (ts-adjust 'day (cl-parse-integer to))
-                        (ts-apply :hour 23 :minute 59 :second 59)))
+                     (ts-adjust 'day (cl-parse-integer to))
+                     (ts-apply :hour 23 :minute 59 :second 59)))
                   ((pred stringp) (ts-parse-fill 'end to))
                   ((pred ts-p) to))))))
 
@@ -1135,6 +1310,74 @@ predicates."
   "Return non-nil if entry's TODO keyword is in `org-done-keywords'."
   ;; NOTE: This was a defsubst before being defined with the macro.  Might be good to make it a defsubst again.
   :body (or (apply #'org-ql--predicate-todo org-done-keywords)))
+
+(defun org-ql--duration-to-minutes (duration)
+  "Return DURATION string as a number of minutes.
+For compatibility, since Org 9.1 deprecated
+`org-duration-string-to-minutes', replacing it with
+`org-duration-to-minutes', which seems to return floats instead
+of integers."
+  ;; FIXME: Define this as an alias instead.
+  ;; MAYBE: Remove if compatibility with Org 9.0 is dropped.
+  (funcall (if (fboundp 'org-duration-to-minutes)
+               #'org-duration-to-minutes
+             #'org-duration-string-to-minutes)
+           duration))
+
+(org-ql-defpred effort (&optional effort-or-comparator effort)
+  "Return non-nil if current heading's effort property matches arguments.
+The following forms are accepted:
+
+  (effort DURATION): Matches if effort is DURATION.
+  (effort DURATION DURATION): Matches if effort is between DURATIONs, inclusive.
+  (effort COMPARATOR DURATION): Matches if effort compares to DURATION with COMPARATOR.
+
+COMPARATOR may be `<', `<=', `>', or `>='.  DURATION should be an
+Org effort string, like \"5\" or \"0:05\"."
+  :normalizers ((`(,predicate-names . ,args)
+                 ;; Arguments could be given as strings (e.g. from a non-Lisp query).
+                 `(effort ,@(--map (pcase-exhaustive it
+                                     ((or "<" "<=" ">" ">=" "=")
+                                      (intern it))
+                                     ((pred stringp) (org-ql--duration-to-minutes it))
+                                     ((pred numberp) it)
+                                     ((or '< '<= '> '>= '=)
+                                      ;; FIXME: This same treatment probably needs to be done in the (level) predicate's normalizer (which I would have caught had I already written tests for it).
+                                      `',it))
+                                   args))))
+  ;; NOTE: We always test the body, because we must ensure that the
+  ;; ":effort:" string found is actually an entry property.
+  :preambles ((`(,predicate-names ,_comparator-or-num ,_num)
+               ;; Since we can't compare this using regexps, we just check for what looks like a valid effort.
+               ;; FIXME: Are decimal efforts allowed, or only colon-separated HH:MM?
+               (list :regexp (rx-to-string `(seq bol (0+ blank) ":effort:" (1+ blank) (1+ (or digit "." ":"))) t)
+                     :case-fold t :query query))
+              (`(,predicate-names ,num)
+               ;; Testing equality to a certain effort.
+               (let* ((with-colon (org-duration-from-minutes num))
+                      (without-colon (number-to-string num))
+                      (without-colon-and-decimal
+                       (if (string-suffix-p ".0" without-colon)
+                           (replace-regexp-in-string (rx ".0" eos) "" without-colon t t)
+                         "")))
+                 (list :regexp (rx-to-string `(seq bol (0+ blank) ":effort:" (1+ blank)
+                                                   (or ,with-colon ,without-colon ,without-colon-and-decimal) (or blank eol)) t)
+                       :case-fold t :query query))))
+  :body (let ((entry-effort (org-entry-get (point) "effort"))
+              entry-effort-minutes)
+          (when entry-effort
+            (setf entry-effort-minutes (org-ql--duration-to-minutes entry-effort))
+            (pcase effort-or-comparator
+              ('nil
+               ;; Any effort.  (NOTE: This must come before the symbolp clause, because `symbolp' is non-nil for nil!)
+               t)
+              ((pred numberp) (pcase effort
+                                ('nil ;; Equality
+                                 (= effort-or-comparator entry-effort-minutes))
+                                ((pred numberp) ;; Between two levels
+                                 (<= effort-or-comparator entry-effort-minutes effort))))
+              ((pred symbolp) ;; Compare with function
+               (funcall effort-or-comparator entry-effort-minutes effort))))))
 
 (org-ql-defpred habit ()
   "Return non-nil if entry is a habit."
@@ -1256,17 +1499,24 @@ any link is found."
                          "]"
                          (or eol blank))))
               (`(,predicate-names ,(and description-or-target
-                                        (guard (not (keywordp description-or-target)))))
+                                        (guard (not (keywordp description-or-target))))
+                                  . ,plist)
                (list :regexp (org-ql--link-regexp :description-or-target
-                                                  (regexp-quote description-or-target)))
+                                                  (if (plist-get plist :regexp-p)
+                                                      description-or-target
+                                                    (regexp-quote description-or-target))))
                nil)
               (`(,predicate-names . ,plist)
                (list :regexp (org-ql--link-regexp
                               :description
                               (when (plist-get plist :description)
-                                (regexp-quote (plist-get plist :description)))
+                                (if (plist-get plist :regexp-p)
+                                    (plist-get plist :description)
+                                  (regexp-quote (plist-get plist :description))))
                               :target (when (plist-get plist :target)
-                                        (regexp-quote (plist-get plist :target)))))
+                                        (if (plist-get plist :regexp-p)
+                                            (plist-get plist :target)
+                                          (regexp-quote (plist-get plist :target))))))
                nil))
   :body (let* (plist description-or-target description target regexp-p)
           (if (not (keywordp (car args)))
@@ -1274,7 +1524,7 @@ any link is found."
                     plist (cdr args))
             (setf plist args))
           (setf description (plist-get plist :description)
-                target (plist-get plist :description)
+                target (plist-get plist :target)
                 regexp-p (plist-get plist :regexp-p))
           (unless regexp-p
             ;; NOTE: It would also be preferable to avoid regexp-quoting every time this predicate
@@ -1711,39 +1961,46 @@ With KEYWORDS, return non-nil if its keyword is one of KEYWORDS (a list of strin
 
 ;;;;;; Timestamps
 
-;; TODO: Remove the _on vars from these arg lists.  I think they're not
+;; NOTE: The underscores before some arguments in these definitions
+;; prevent "unused lexical variable" warnings, because we pre-process
+;; them before the functions are called.
+
+;; TODO: Remove the _underscored vars from these arg lists.  I think they're not
 ;; necessary, or shouldn't be, since --pre-process-query should handle them.
 
-;; NOTE: These docstrings apply to the functions defined by `org-ql--defpref',
-;; not necessarily to the way users are expected to call them in queries.  The
-;; queries are pre-processed by `org-ql--normalize-query' to handle
-;; arguments which are constant during a query's execution.
+;; NOTE: Arguments to these predicates are pre-processed in
+;; `org-ql--normalize-query' and `org-ql--query-predicate'.  Some
+;; arguments are not to be given by the user in a query,
+;; e.g. `regexp'.  FROM and TO are actually expected to be `ts'
+;; structs.  However, the docstrings are written for users, which
+;; makes documentation easier to update.
 
 ;; TODO: Update the macro to define a user-facing docstring so I don't
 ;; have to manually update the documentation.
 
-(org-ql-defpred clocked (&key from to _on)
-  ;; The underscore before `on' prevents "unused lexical variable"
-  ;; warnings, because we pre-process that argument in a macro before
-  ;; this function is called.
-  "Return non-nil if current entry was clocked in given period.
-If no arguments are specified, return non-nil if entry has any
-timestamp.
+;; This string is common to these predicates and is used in
+;; documentation; keeping it here should make it easier to update:
+"If FROM, return non-nil if entry's timestamp is on or after FROM.
 
-If FROM, return non-nil if entry has a timestamp on or after
-FROM.
+If TO, return non-nil if entry's timestamp is on or before TO.
 
-If TO, return non-nil if entry has a timestamp on or before TO.
-
-If ON, return non-nil if entry has a timestamp on date ON.
+If ON, return non-nil if entry's timestamp is on date ON.
 
 FROM, TO, and ON should be either `ts' structs, or strings
 parseable by `parse-time-string' which may omit the time value."
+
+(org-ql-defpred clocked (&key from to _on)
+  "Return non-nil if current entry was clocked in given period.
+Without arguments, return non-nil if entry was ever clocked.
+Note: Clock entries are expected to be clocked out.  Currently
+clocked entries (i.e. with unclosed timestamp ranges) are
+ignored."
+  ;; TODO: Verify that currently clocked entries are still ignored.
   :normalizers ((`(,predicate-names ,(and num-days (pred numberp)))
                  ;; (clocked) and (closed) implicitly look into the past.
                  (let ((from (->> (ts-now)
-                                  (ts-adjust 'day (* -1 num-days))
-                                  (ts-apply :hour 0 :minute 0 :second 0))))
+                               (ts-adjust 'day (* -1 num-days))
+                               (ts-apply :hour 0 :minute 0 :second 0))))
                    `(clocked :from ,from))))
   :preambles ((`(,predicate-names ,(pred numberp))
                (list :regexp org-ql-clock-regexp :query t))
@@ -1753,27 +2010,14 @@ parseable by `parse-time-string' which may omit the time value."
   (org-ql--predicate-ts :from from :to to :regexp org-ql-clock-regexp :match-group 1))
 
 (org-ql-defpred closed (&key from to _on)
-  ;; The underscore before `on' prevents "unused lexical variable"
-  ;; warnings, because we pre-process that argument in a macro before
-  ;; this function is called.
+  ;; MAYBE: Use the new org-ql-regexps?
   "Return non-nil if current entry was closed in given period.
-If no arguments are specified, return non-nil if entry has any
-timestamp.
-
-If FROM, return non-nil if entry has a timestamp on or after
-FROM.
-
-If TO, return non-nil if entry has a timestamp on or before TO.
-
-If ON, return non-nil if entry has a timestamp on date ON.
-
-FROM, TO, and ON should be either `ts' structs, or strings
-parseable by `parse-time-string' which may omit the time value."
+Without arguments, return non-nil if entry is closed."
   :normalizers ((`(,predicate-names ,(and num-days (pred numberp)))
                  ;; (clocked) and (closed) implicitly look into the past.
                  (let ((from (->> (ts-now)
-                                  (ts-adjust 'day (* -1 num-days))
-                                  (ts-apply :hour 0 :minute 0 :second 0))))
+                               (ts-adjust 'day (* -1 num-days))
+                               (ts-apply :hour 0 :minute 0 :second 0))))
                    `(closed :from ,from))))
   :preambles ((`(,predicate-names . ,_)
                ;;  Predicate still needs testing.
@@ -1782,43 +2026,38 @@ parseable by `parse-time-string' which may omit the time value."
   (org-ql--predicate-ts :from from :to to :regexp org-closed-time-regexp :match-group 1
                         :limit (line-end-position 2)))
 
-(org-ql-defpred deadline (&key from to _on)
-  ;; The underscore before `on' prevents "unused lexical variable"
-  ;; warnings, because we pre-process that argument in a macro before
-  ;; this function is called.
+(org-ql-defpred deadline (&key from to _on regexp _with-time)
   "Return non-nil if current entry has deadline in given period.
-If no arguments are specified, return non-nil if entry has any
-timestamp.
-
-If FROM, return non-nil if entry has a timestamp on or after
-FROM.
-
-If TO, return non-nil if entry has a timestamp on or before TO.
-
-If ON, return non-nil if entry has a timestamp on date ON.
-
-FROM, TO, and ON should be either `ts' structs, or strings
-parseable by `parse-time-string' which may omit the time value."
+If argument is `auto', return non-nil if entry has deadline
+within `org-deadline-warning-days'.  Without arguments, return
+non-nil if entry has a deadline."
   :normalizers ((`(,predicate-names auto)
                  ;; Use `org-deadline-warning-days' as the :to arg.
                  (let ((to (->> (ts-now)
-                                (ts-adjust 'day org-deadline-warning-days)
-                                (ts-apply :hour 23 :minute 59 :second 59))))
+                             (ts-adjust 'day org-deadline-warning-days)
+                             (ts-apply :hour 23 :minute 59 :second 59))))
                    `(deadline-warning :to ,to)))
                 (`(,predicate-names ,(and num-days (pred numberp)))
                  (let ((to (->> (ts-now)
-                                (ts-adjust 'day num-days)
-                                (ts-apply :hour 23 :minute 59 :second 59))))
+                             (ts-adjust 'day num-days)
+                             (ts-apply :hour 23 :minute 59 :second 59))))
                    `(deadline :to ,to))))
-  ;; NOTE: Does this normalizer cause the preamble to not be used?  (Adding one to the deadline-warning definition to be sure.)
-  :preambles ((`(,predicate-names . ,_)
-               (list :regexp org-deadline-time-regexp :query query)))
+  ;; NOTE: Does this normalizer cause the preamble to not be used?
+  ;; (Adding one to the deadline-warning definition to be sure.)
+  :preambles ((`(,predicate-names . ,rest)
+               (list :query query
+                     :regexp (pcase-exhaustive (org-ql--plist-get* rest :with-time)
+                               ((or 't "t") org-ql-regexp-deadline-with-time)
+                               ((or 'nil "nil") org-ql-regexp-deadline-without-time)
+                               ('not-found org-ql-regexp-deadline)))))
   :body
-  (org-ql--predicate-ts :from from :to to :regexp org-deadline-time-regexp :match-group 1
+  (org-ql--predicate-ts :from from :to to :regexp regexp :match-group 1
                         :limit (line-end-position 2)))
 
 (org-ql-defpred deadline-warning (&key from to)
-  "Internal selector used to handle `org-deadline-warning-days' and deadlines with warning periods."
+  ;; TODO: Should this also accept a WITH-TIME argument?
+  ;; MAYBE: Use the new org-ql-regexps?
+  "Internal predicate used to handle `org-deadline-warning-days' and deadlines with warning periods."
   :preambles ((`(,predicate-names . ,_)
                (list :regexp org-deadline-time-regexp :query query)))
   :body
@@ -1845,82 +2084,49 @@ parseable by `parse-time-string' which may omit the time value."
            (ts<= (->> ts (ts-adjust unit (- warning-value))) org-ql--today))
           ('week (ts<= (->> ts (ts-adjust 'day (* -7 warning-value))) org-ql--today)))))))
 
-(org-ql-defpred planning (&key from to _on)
-  ;; The underscore before `on' prevents "unused lexical variable"
-  ;; warnings, because we pre-process that argument in a macro before
-  ;; this function is called.
-  "Return non-nil if current entry has planning timestamp in given period (i.e. its deadline, scheduled, or closed timestamp).
-If no arguments are specified, return non-nil if entry has any
-timestamp.
-
-If FROM, return non-nil if entry has a timestamp on or after
-FROM.
-
-If TO, return non-nil if entry has a timestamp on or before TO.
-
-If ON, return non-nil if entry has a timestamp on date ON.
-
-FROM, TO, and ON should be either `ts' structs, or strings
-parseable by `parse-time-string' which may omit the time value."
+(org-ql-defpred planning (&key from to _on regexp _with-time)
+  "Return non-nil if current entry has planning timestamp in given period.
+Without arguments, return non-nil if entry has any planning timestamp."
   :normalizers ((`(,predicate-names ,(and num-days (pred numberp)))
                  (let ((to (->> (ts-now)
-                                (ts-adjust 'day num-days)
-                                (ts-apply :hour 23 :minute 59 :second 59))))
+                             (ts-adjust 'day num-days)
+                             (ts-apply :hour 23 :minute 59 :second 59))))
                    `(planning :to ,to))))
-  :preambles ((`(,predicate-names . ,_)
-               (list :regexp org-ql-planning-regexp :query query)))
+  :preambles ((`(,predicate-names . ,rest)
+               (list :query query
+                     :regexp (pcase-exhaustive (org-ql--plist-get* rest :with-time)
+                               ((or 't "t") org-ql-regexp-planning-with-time)
+                               ((or 'nil "nil") org-ql-regexp-planning-without-time)
+                               ('not-found org-ql-regexp-planning)))))
+  ;; MAYBE: Should the regexp be done in the normalizer instead?  (If
+  ;; so, also in other ts-related predicates.)
   :body
-  (org-ql--predicate-ts :from from :to to :regexp org-ql-planning-regexp :match-group 1
+  (org-ql--predicate-ts :from from :to to :regexp regexp :match-group 1
                         :limit (line-end-position 2)))
 
-(org-ql-defpred scheduled (&key from to _on)
-  ;; The underscore before `on' prevents "unused lexical variable"
-  ;; warnings, because we pre-process that argument in a macro before
-  ;; this function is called.
+(org-ql-defpred scheduled (&key from to _on regexp _with-time)
   "Return non-nil if current entry is scheduled in given period.
-If no arguments are specified, return non-nil if entry has any
-timestamp.
-
-If FROM, return non-nil if entry has a timestamp on or after
-FROM.
-
-If TO, return non-nil if entry has a timestamp on or before TO.
-
-If ON, return non-nil if entry has a timestamp on date ON.
-
-FROM, TO, and ON should be either `ts' structs, or strings
-parseable by `parse-time-string' which may omit the time value."
+Without arguments, return non-nil if entry is scheduled."
   :normalizers ((`(,predicate-names ,(and num-days (pred numberp)))
                  (let ((to (->> (ts-now)
-                                (ts-adjust 'day num-days)
-                                (ts-apply :hour 23 :minute 59 :second 59))))
+                             (ts-adjust 'day num-days)
+                             (ts-apply :hour 23 :minute 59 :second 59))))
                    `(scheduled :to ,to))))
-  :preambles ((`(,predicate-names . ,_)
-               (list :regexp org-scheduled-time-regexp :query query)))
+  :preambles ((`(,predicate-names . ,rest)
+               (list :query query
+                     :regexp (pcase-exhaustive (org-ql--plist-get* rest :with-time)
+                               ((or 't "t") org-ql-regexp-scheduled-with-time)
+                               ((or 'nil "nil") org-ql-regexp-scheduled-without-time)
+                               ('not-found org-ql-regexp-scheduled)))))
   :body
-  (org-ql--predicate-ts :from from :to to :regexp org-scheduled-time-regexp :match-group 1
+  (org-ql--predicate-ts :from from :to to :regexp regexp :match-group 1
                         :limit (line-end-position 2)))
 
 (org-ql-defpred (ts ts-active ts-a ts-inactive ts-i)
-  (&key from to _on regexp (match-group 0) (limit (org-entry-end-position)))
-  ;; NOTE: Arguments to this predicate are pre-processed in `org-ql--normalize-query'.
-  ;; The underscore before `on' prevents "unused lexical variable" warnings due to the
-  ;; pre-processing converting that argument to FROM and TO.  The `regexp' argument is
-  ;; also provided by the pre-processing and is not to be given by the user.  FROM and
-  ;; TO are actually expected to be `ts' structs.  The docstring is written for users.
+  (&key from to _on regexp _with-time
+        (match-group 0) (limit (org-entry-end-position)))
   "Return non-nil if current entry has a timestamp in given period.
-If no arguments are specified, return non-nil if entry has any
-timestamp.
-
-If FROM, return non-nil if entry has a timestamp on or after
-FROM.
-
-If TO, return non-nil if entry has a timestamp on or before TO.
-
-If ON, return non-nil if entry has a timestamp on date ON.
-
-FROM, TO, and ON should be either `ts' structs, or strings
-parseable by `parse-time-string' which may omit the time value.
+Without arguments, return non-nil if entry has a timestamp.
 
 TYPE may be `active' to match active timestamps, `inactive' to
 match inactive ones, or `both' / nil to match both types.
@@ -1928,24 +2134,39 @@ match inactive ones, or `both' / nil to match both types.
 LIMIT bounds the search for the timestamp REGEXP.  It defaults to
 the end of the entry, i.e. the position returned by
 `org-entry-end-position', but for certain searches it should be
-bound to a different positiion, e.g. for planning lines, the end
-of the line after the heading."
+bound to a different positiion (e.g. for planning lines, the end
+of the line after the heading).  MATCH-GROUP should be the number
+of REGEXP's group that matches the Org timestamp (i.e. excluding
+any planning prefix); it defaults to 0 (i.e. the whole regexp)."
   ;; MAYBE: Define active/inactive ones separately?
-  :normalizers ((`(,(or 'ts-active 'ts-a) . ,rest) `(ts :type active ,@rest))
-                (`(,(or 'ts-inactive 'ts-i) . ,rest) `(ts :type inactive ,@rest)))
-  :preambles ((`(,predicate-names . ,rest)
-               (list :regexp (pcase (plist-get rest :type)
-                               ((or 'nil 'both) org-tsr-regexp-both)
-                               ('active org-tsr-regexp)
-                               ('inactive org-ql-tsr-regexp-inactive))
-                     ;; Predicate needs testing only when args are present.
-                     :query (-let (((&keys :from :to :on) rest))
-                              ;; FIXME: This used to be (when (or from to on) query), but that doesn't seem right, so I
-                              ;; changed it to this if, and the tests pass either way.  Might deserve a little scrutiny.
-                              (if (or from to on)
-                                  query
-                                t)))))
-  ;; TODO: DRY this with the clocked predicate.
+  :normalizers
+  ((`(,(or 'ts-active 'ts-a) . ,rest) `(ts :type active ,@rest))
+   (`(,(or 'ts-inactive 'ts-i) . ,rest) `(ts :type inactive ,@rest)))
+
+  :preambles
+  ((`(,predicate-names . ,rest)
+    (list :regexp (pcase (plist-get rest :type)
+                    ((or 'nil 'both) (pcase-exhaustive (org-ql--plist-get* rest :with-time)
+                                       ((or 't "t") org-ql-regexp-ts-both-with-time)
+                                       ((or 'nil "nil") org-ql-regexp-ts-both-without-time)
+                                       ('not-found org-ql-regexp-ts-both)))
+                    ('active (pcase-exhaustive (org-ql--plist-get* rest :with-time)
+                               ((or 't "t") org-ql-regexp-ts-active-with-time)
+                               ((or 'nil "nil") org-ql-regexp-ts-active-without-time)
+                               ('not-found org-ql-regexp-ts-active)))
+                    ('inactive (pcase-exhaustive (org-ql--plist-get* rest :with-time)
+                                 ((or 't "t") org-ql-regexp-ts-inactive-with-time)
+                                 ((or 'nil "nil") org-ql-regexp-ts-inactive-without-time)
+                                 ('not-found org-ql-regexp-ts-inactive))))
+          ;; Predicate needs testing only when args are present.
+          :query (-let (((&keys :from :to :on) rest))
+                   ;; TODO: This used to be (when (or from to on) query), but
+                   ;; that doesn't seem right, so I changed it to this if, and the
+                   ;; tests pass either way.  Might deserve a little scrutiny.
+                   (if (or from to on)
+                       query
+                     t)))))
+
   :body
   (cl-macrolet ((next-timestamp ()
                                 `(when (re-search-forward regexp limit t)
