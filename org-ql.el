@@ -1173,7 +1173,7 @@ QUERY is a valid `org-ql' query."
      :body
      ,query))
 
-(defmacro org-ql--from-to-on ()
+(defmacro org-ql--normalize-from-to-on (&rest body)
   "For internal use.
 Expands into a form that processes arguments to timestamp-related
 predicates and evaluates BODY, which is expected to evaluate to a
