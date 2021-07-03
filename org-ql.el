@@ -1158,9 +1158,7 @@ QUERY is a valid `org-ql' query."
   `(org-ql-defpred ,name ,args
      ,docstring
      :normalizers ((`(,predicate-names)
-                    (rec ',query)))
-     :preambles ((`(,predicate-names)
-                  (rec ',query)))
+                    `,query))
      :body
      ,query))
 
